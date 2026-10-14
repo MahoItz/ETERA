@@ -1,3 +1,5 @@
+import { TreeHero } from "./TreeHero";
+import type { TreeOrnament } from "./tree-items";
 import {
   useEffect,
   useRef,
@@ -28,7 +30,6 @@ import {
 } from "lucide-react";
 import {
   defaults,
-  seed,
   filterWorks,
   visibleWorks,
   type Work,
@@ -43,6 +44,9 @@ import {
   signIn,
   signOut,
   uploadPhoto,
+  saveTreeOrnament,
+  deleteTreeOrnament,
+  cleanUnusedTreeImage,
 } from "./catalog";
 const money = (n: number | null) =>
   n === null
@@ -148,216 +152,11 @@ function resetTilt(e: ReactPointerEvent<HTMLElement>) {
   for (const name of ["--tilt-x", "--tilt-y", "--move-x", "--move-y"])
     e.currentTarget.style.removeProperty(name);
 }
-function StudioHero({
-  works,
-  ready,
-  onOpen,
-  stopMotion,
-}: {
-  works: Work[];
-  ready: boolean;
-  onOpen: (work: Work) => void;
-  stopMotion: boolean;
-}) {
-  const items = visibleWorks(ready ? works : seed).slice(0, 4);
-  const [index, setIndex] = useState(0),
-    [paused, setPaused] = useState(false),
-    [reduced, setReduced] = useState(true),
-    [hovered, setHovered] = useState(false);
-  useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(m.matches);
-    update();
-    m.addEventListener("change", update);
-    return () => m.removeEventListener("change", update);
-  }, []);
-  useEffect(() => {
-    if (items.length < 2 || paused || reduced || hovered || stopMotion) return;
-    const id = setInterval(() => {
-      if (!document.hidden) setIndex((i) => (i + 1) % items.length);
-    }, 6500);
-    return () => clearInterval(id);
-  }, [items.length, paused, reduced, hovered, stopMotion]);
-  const active = items[index % Math.max(1, items.length)],
-    next = items[(index + 1) % Math.max(1, items.length)];
-  const open = (work: Work) => {
-    if (ready) onOpen(work);
-    else
-      document
-        .getElementById("catalog")
-        ?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
-  };
-  return (
-    <>
-      <section className="hero" onPointerMove={tilt} onPointerLeave={resetTilt}>
-        <div className="hero-orbit orbit-one" aria-hidden="true" />
-        <div className="hero-orbit orbit-two" aria-hidden="true" />
-        <span className="hero-spark spark-one" aria-hidden="true">
-          ✳
-        </span>
-        <span className="hero-spark spark-two" aria-hidden="true">
-          ✧
-        </span>
-        <div className="hero-copy">
-          <div className="eyebrow">
-            <span />
-            МАЛЕНЬКАЯ МАСТЕРСКАЯ. БОЛЬШИЕ ЧУВСТВА.
-          </div>
-          <h1>
-            <span className="hero-line">Вещи, в которых</span>
-            <span className="hero-line">
-              <em>живёт</em> <span className="outlined-word">тепло.</span>
-            </span>
-          </h1>
-          <p>
-            Немного гипса. Много фантазии.
-            <br />И маленькая история для вашего дома.
-          </p>
-          <a className="button primary hero-cta" href="#catalog">
-            Найти свою историю{" "}
-            <span>
-              <ArrowUpRight size={21} />
-            </span>
-          </a>
-          <div className="hero-foot">
-            <span className="hero-foot-line" />
-            <span>Придумано. Отлито. Расписано вручную.</span>
-          </div>
-        </div>
-        <div
-          className="hero-art"
-          onPointerEnter={() => setHovered(true)}
-          onPointerLeave={() => setHovered(false)}
-          onFocusCapture={() => setHovered(true)}
-          onBlurCapture={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node))
-              setHovered(false);
-          }}
-        >
-          <div className="art-backplate" aria-hidden="true" />
-          <div className="art-label" aria-hidden="true">
-            HANDMADE
-            <br />
-            WITH LOVE
-          </div>
-          {active ? (
-            <div className="hero-parallax">
-              <button
-                className="hero-main"
-                onClick={() => open(active)}
-                aria-label={"Рассмотреть " + active.title}
-              >
-                <img
-                  key={active.id}
-                  src={imageUrl(active.photos[0]?.url || "")}
-                  alt={active.photos[0]?.alt || active.title}
-                  fetchPriority="high"
-                />
-                <span className="hero-caption">
-                  <span>{active.title}</span>
-                  <ArrowUpRight size={21} />
-                </span>
-              </button>
-            </div>
-          ) : (
-            <div className="hero-empty">
-              <Flower2 size={80} strokeWidth={0.8} />
-              <span>Скоро здесь появятся новые работы</span>
-            </div>
-          )}
-          {next && items.length > 1 && (
-            <button
-              className="hero-small"
-              onClick={() => open(next)}
-              aria-label={"Рассмотреть " + next.title}
-            >
-              <img
-                key={next.id}
-                src={imageUrl(next.photos[0]?.url || "")}
-                alt={next.photos[0]?.alt || next.title}
-              />
-              <span>
-                {next.category} <ArrowUpRight size={16} />
-              </span>
-            </button>
-          )}
-          <div className="round-stamp" aria-hidden="true">
-            <svg viewBox="0 0 120 120">
-              <defs>
-                <path
-                  id="stamp-circle"
-                  d="M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0"
-                />
-              </defs>
-              <text>
-                <textPath href="#stamp-circle" textLength="264">
-                  СОЗДАНО С ДУШОЙ · СОЗДАНО С ДУШОЙ ·{" "}
-                </textPath>
-              </text>
-            </svg>
-            <Flower2 size={37} strokeWidth={1.1} />
-          </div>
-          <div className="hero-pagination">
-            <span>ИСТОРИИ МАСТЕРСКОЙ</span>
-            <div>
-              {items.map((w, i) => (
-                <button
-                  key={w.id}
-                  className={
-                    index % Math.max(1, items.length) === i ? "selected" : ""
-                  }
-                  onClick={() => {
-                    setIndex(i);
-                    setPaused(true);
-                  }}
-                  aria-label={"Показать " + w.title}
-                  aria-pressed={index % Math.max(1, items.length) === i}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </button>
-              ))}
-              {items.length > 1 && !reduced && (
-                <button
-                  className="pause-motion"
-                  onClick={() => setPaused((v) => !v)}
-                  aria-label={
-                    paused ? "Продолжить смену работ" : "Остановить смену работ"
-                  }
-                >
-                  {paused ? <Play size={13} /> : <Pause size={13} />}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        <a className="hero-scroll" href="#catalog">
-          <span>ДАЛЬШЕ — КОЛЛЕКЦИЯ</span>
-          <ChevronDown size={15} />
-        </a>
-      </section>
-      <div
-        className="ribbon"
-        aria-label="Ручная работа. Маленькие радости. Для вашего дома."
-      >
-        <div className="ribbon-track" aria-hidden="true">
-          {[0, 1].map((i) => (
-            <div key={i}>
-              <span>ручная работа</span>
-              <Flower2 size={27} />
-              <span>маленькие радости</span>
-              <Sparkles size={25} />
-              <span>для вашего дома</span>
-              <Flower2 size={27} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
 export default function Catalog() {
   const motionRoot = useRef<HTMLDivElement>(null);
   const [motionPaused, setMotionPaused] = useState(false);
+  const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
+  const [showTreeEditor, setShowTreeEditor] = useState(false);
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
@@ -383,6 +182,7 @@ export default function Catalog() {
         getAdminSession(),
       ]);
       setWorks(data.works);
+      setOrnaments(data.ornaments);
       setSettings(data.settings);
       setAdmin(Boolean(session));
     } catch (e) {
@@ -521,8 +321,9 @@ export default function Catalog() {
         </button>
       </header>
       {!admin && (
-        <StudioHero
+        <TreeHero
           works={works}
+          ornaments={ornaments}
           ready={!loading && !error}
           onOpen={open}
           stopMotion={motionPaused}
@@ -550,6 +351,9 @@ export default function Catalog() {
           </div>
           {admin ? (
             <div className="admin-actions">
+              <button className="button secondary" onClick={() => setShowTreeEditor(true)}>
+                <Sparkles size={16} /> Работы на ёлке
+              </button>
               <button
                 className="button secondary"
                 onClick={() => setShowSettings(true)}
@@ -994,6 +798,11 @@ export default function Catalog() {
           onSaved={saved}
         />
       )}
+      {admin && showTreeEditor && <TreeEditor works={works} ornaments={ornaments}
+        onClose={() => setShowTreeEditor(false)}
+        onSaved={(item) => setOrnaments((items) => [...items.filter((i) => i.id !== item.id), item].sort((a, b) => a.position - b.position))}
+        onDeleted={(id) => setOrnaments((items) => items.filter((i) => i.id !== id))}
+      />}
       {loginOpen && (
         <LoginEditor
           onClose={() => setLoginOpen(false)}
@@ -1044,6 +853,8 @@ function WorkEditor({
     [progress, setProgress] = useState(""),
     [error, setError] = useState("");
   const [customCategory, setCustomCategory] = useState(false);
+
+
   const pendingPhotos = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
   useEffect(() => () => {
     for (const url of pendingPhotos.current.keys()) URL.revokeObjectURL(url);
@@ -1122,6 +933,8 @@ function WorkEditor({
         availability,
         status,
         featured,
+
+
         photos: savedPhotos,
         revision: work?.revision,
       };
@@ -1376,6 +1189,158 @@ function WorkEditor({
     </Modal>
   );
 }
+function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted }: {
+  works: Work[]; ornaments: TreeOrnament[]; onClose: () => void;
+  onSaved: (item: TreeOrnament) => void; onDeleted: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState<TreeOrnament | null>(null);
+  const [title, setTitle] = useState("");
+  const [workId, setWorkId] = useState("");
+  const [image, setImage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState("");
+  const newId = useRef(crypto.randomUUID());
+  const pending = useRef<{ blob: Blob; uploaded?: string } | null>(null);
+  const localUrls = useRef(new Set<string>());
+  const uploadedUrls = useRef(new Set<string>());
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => () => {
+    for (const url of localUrls.current) URL.revokeObjectURL(url);
+    for (const url of uploadedUrls.current) void cleanUnusedTreeImage(url).catch(() => {});
+  }, []);
+  function choose(item: TreeOrnament | null) {
+    setEditing(item);
+    setTitle(item?.title ?? "");
+    setWorkId(item?.workId ?? "");
+    setImage(item?.imageUrl ?? "");
+    newId.current = crypto.randomUUID();
+    pending.current = null;
+    if (fileInput.current) fileInput.current.value = "";
+    setError("");
+  }
+  async function prepare(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    setProgress("Обрабатываем изображение…");
+    try {
+      if (file.type !== "image/webp") throw new Error("Выберите WebP с прозрачным фоном.");
+      const blob = await compressPhoto(file);
+      const url = URL.createObjectURL(blob);
+      localUrls.current.add(url);
+      pending.current = { blob };
+      setImage(url);
+      if (!title.trim()) setTitle(file.name.replace(/\.webp$/i, "").slice(0, 120));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось обработать изображение");
+    } finally {
+      setBusy(false);
+      setProgress("");
+    }
+  }
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!image || !workId || !title.trim()) {
+      setError("Добавьте изображение, название игрушки и выберите работу для ссылки.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setProgress("Сохраняем игрушку…");
+    try {
+      let imageUrl = image;
+      if (pending.current) {
+        if (!pending.current.uploaded) {
+          const result = await uploadPhoto(pending.current.blob);
+          pending.current.uploaded = result.url;
+          uploadedUrls.current.add(result.url);
+        }
+        imageUrl = pending.current.uploaded;
+      }
+      const saved = await saveTreeOrnament({
+        id: editing?.id ?? newId.current, title, imageUrl, workId,
+        position: editing?.position ?? Math.max(-1, ...ornaments.map((i) => i.position)) + 1,
+      });
+      uploadedUrls.current.delete(imageUrl);
+      onSaved(saved);
+      if (editing && editing.imageUrl !== imageUrl) void cleanUnusedTreeImage(editing.imageUrl).catch(() => {});
+      choose(null);
+      setMessage("Игрушка сохранена. Можно добавить следующую.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сохранить игрушку");
+    } finally {
+      setBusy(false);
+      setProgress("");
+    }
+  }
+  async function remove(item: TreeOrnament) {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteTreeOrnament(item.id);
+      onDeleted(item.id);
+      if (editing?.id === item.id) choose(null);
+      void cleanUnusedTreeImage(item.imageUrl).catch(() => {});
+      setMessage("Игрушка убрана с ёлки. Работа осталась в каталоге.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось убрать игрушку");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const linkedWork = works.find((w) => w.id === workId);
+  return <Modal title="Работы на ёлке" onClose={() => { if (!busy) onClose(); }} wide>
+    <div className="tree-manager">
+      <p className="form-intro">У каждой игрушки своё изображение и ссылка на работу в каталоге. Например, отдельные Снегурочка и Дед Мороз могут открывать одну общую карточку.</p>
+      {ornaments.length > 0 && <div className="tree-manager-list" aria-label="Добавленные игрушки">
+        {ornaments.map((item) => {
+          const work = works.find((w) => w.id === item.workId);
+          return <div className="tree-manager-item" key={item.id}>
+            <img src={imageUrl(item.imageUrl)} alt={item.title} />
+            <div><strong>{item.title}</strong><span>Открывает: {work?.title ?? "Работа недоступна"}</span>
+              {(!work || work.status !== "published" || work.availability === "sold") && <small>Скрыта до публикации доступной работы</small>}
+            </div>
+            <button type="button" className="button secondary" disabled={busy} onClick={() => choose(item)}>Изменить</button>
+            <button type="button" className="icon-button" disabled={busy} onClick={() => void remove(item)} aria-label={`Убрать с ёлки: ${item.title}`}><X size={18} /></button>
+          </div>;
+        })}
+      </div>}
+      <p className="hint">На главной показываются первые 8 игрушек, связанных с опубликованными непроданными работами.</p>
+      <form className="editor-form tree-ornament-form" onSubmit={submit}>
+        <h3>{editing ? "Изменить игрушку" : "Добавить игрушку на ёлку"}</h3>
+        <label>Название игрушки *<input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} disabled={busy} placeholder="Например, Снегурочка" /></label>
+        <label>Изображение игрушки *<input ref={fileInput} type="file" accept="image/webp" disabled={busy} onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          void prepare(file);
+        }} /></label>
+        <p className="hint">WebP с прозрачным фоном. Файл отправляется в Storage только после нажатия «Добавить на ёлку» или «Сохранить изменения».</p>
+        {image && <div className="tree-image-preview"><img src={imageUrl(image)} alt="Предпросмотр игрушки" /></div>}
+        <label>Какую работу открывать при нажатии *<select required value={workId} onChange={(e) => setWorkId(e.target.value)} disabled={busy}>
+          <option value="" disabled>Выберите работу из каталога</option>
+          {works.map((work) => <option key={work.id} value={work.id}>{work.title}{work.status !== "published" ? " (не опубликована)" : work.availability === "sold" ? " (продана)" : ""}</option>)}
+        </select></label>
+        {linkedWork && <div className="tree-link-preview">
+          {linkedWork.photos[0] && <img src={imageUrl(linkedWork.photos[0].url)} alt="" />}
+          <span>При нажатии откроется: <strong>{linkedWork.title}</strong></span>
+        </div>}
+        {linkedWork && (linkedWork.status !== "published" || linkedWork.availability === "sold") && <p className="hint">Игрушка появится на главной, когда связанная работа будет опубликована и не будет отмечена как проданная.</p>}
+        {!works.length && <p className="hint">Сначала добавьте работу в каталог, чтобы связать с ней игрушку.</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {message && <p role="status">{message}</p>}
+        <div className="form-footer">
+          {editing && <button type="button" className="button secondary" disabled={busy} onClick={() => choose(null)}>Новая игрушка</button>}
+          <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Закрыть</button>
+          <button className="button primary" disabled={busy || !works.length}>{busy ? progress || "Сохраняем…" : editing ? "Сохранить изменения" : "Добавить на ёлку"}</button>
+        </div>
+      </form>
+    </div>
+  </Modal>;
+}
+
 function SettingsEditor({
   settings,
   onClose,

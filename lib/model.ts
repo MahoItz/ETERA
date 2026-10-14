@@ -1,5 +1,5 @@
 export type Photo = {url:string; alt:string};
-export type Work = {id:string; title:string; description:string; category:string; material:string; dimensions:string; price:number|null; availability:'available'|'order'|'sold'; status:'published'|'draft'|'archived'; featured:boolean; photos:Photo[]; revision:number; updatedAt:string};
+export type Work = {id:string; title:string; description:string; category:string; material:string; dimensions:string; price:number|null; availability:'available'|'order'|'sold'; status:'published'|'draft'|'archived'; featured:boolean; treeImage?:string|null; showOnTree?:boolean; photos:Photo[]; revision:number; updatedAt:string};
 export type Settings = {name:string; contact:string; categories:string[]};
 export const defaults:Settings={name:'Мамина мастерская',contact:'',categories:['Феи и балерины','Барашки','Декор для дома']};
 export const seed:Work[]=[

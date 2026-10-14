@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { defaults, type Photo, type Settings, type Work } from "../lib/model";
 import { supabase } from "./supabase";
+import type { TreeOrnament } from "./tree-items";
 
 type WorkRow = Record<string, unknown> & {
   id: string;
@@ -12,6 +13,8 @@ type WorkRow = Record<string, unknown> & {
   availability: Work["availability"];
   status: Work["status"];
   featured: boolean;
+  tree_image?: string | null;
+  show_on_tree?: boolean;
   revision: number;
   updated_at: string;
   category?: { name?: string } | null;
@@ -38,6 +41,8 @@ function mapWork(row: WorkRow): Work {
     availability: row.availability,
     status: row.status,
     featured: row.featured,
+    treeImage: row.tree_image ?? null,
+    showOnTree: row.show_on_tree ?? false,
     photos: (row.photos ?? [])
       .sort((a, b) => a.position - b.position)
       .map(({ url, alt }) => ({ url, alt })),
@@ -48,10 +53,11 @@ function mapWork(row: WorkRow): Work {
 
 export async function loadCatalog(): Promise<{
   works: Work[];
+  ornaments: TreeOrnament[];
   settings: Settings;
   initialized: boolean;
 }> {
-  const [worksResult, settingsResult, categoriesResult] = await Promise.all([
+  const [worksResult, settingsResult, categoriesResult, ornamentsResult] = await Promise.all([
     supabase
       .from("works")
       .select("*, category:categories(name), photos(*)")
@@ -63,12 +69,15 @@ export async function loadCatalog(): Promise<{
       .eq("id", true)
       .maybeSingle(),
     supabase.from("categories").select("name").order("position").order("name"),
+    supabase.from("tree_ornaments").select("*").order("position").order("created_at"),
   ]);
   fail(worksResult.error);
   fail(settingsResult.error);
   fail(categoriesResult.error);
+  fail(ornamentsResult.error);
   return {
     works: ((worksResult.data ?? []) as WorkRow[]).map(mapWork),
+    ornaments: (ornamentsResult.data ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
     settings: {
       name: settingsResult.data?.name ?? defaults.name,
       contact: settingsResult.data?.contact ?? "",
@@ -148,6 +157,7 @@ export async function saveWork(
     (old.data ?? []).map((photo) => [photo.url, photo.storage_path]),
   );
   const keptUrls = new Set(input.photos.map((photo) => photo.url));
+  if (input.treeImage) keptUrls.add(input.treeImage);
   const removedPaths = (old.data ?? []).flatMap((photo) =>
     photo.storage_path && !keptUrls.has(photo.url) ? [photo.storage_path] : [],
   );
@@ -177,6 +187,32 @@ export async function saveWork(
     .single();
   fail(fresh.error);
   return mapWork(fresh.data as WorkRow);
+}
+
+export async function saveTreeOrnament(input: TreeOrnament): Promise<TreeOrnament> {
+  const result = await supabase.from("tree_ornaments").upsert({
+    id: input.id, title: input.title.trim(), image_url: input.imageUrl,
+    work_id: input.workId, position: input.position,
+  }).select("id").single();
+  fail(result.error);
+  return { ...input, title: input.title.trim() };
+}
+
+export async function deleteTreeOrnament(id: string) {
+  const result = await supabase.from("tree_ornaments").delete().eq("id", id);
+  fail(result.error);
+}
+
+// Never remove an image still used by another ornament or a catalogue photo.
+export async function cleanUnusedTreeImage(url: string) {
+  const path = storagePathFromUrl(url);
+  if (!path) return;
+  const results = await Promise.all([
+    supabase.from("tree_ornaments").select("id").eq("image_url", url).limit(1),
+    supabase.from("photos").select("id").eq("url", url).limit(1),
+  ]);
+  if (results.some((r) => r.error || r.data?.length)) return;
+  await supabase.storage.from("work-photos").remove([path]);
 }
 
 function storagePathFromUrl(url: string) {
