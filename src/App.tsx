@@ -1043,8 +1043,20 @@ function WorkEditor({
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(""),
     [error, setError] = useState("");
-  async function upload(files: FileList | null) {
-    if (!files?.length) return;
+  const [customCategory, setCustomCategory] = useState(false);
+  const pendingPhotos = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
+  useEffect(() => () => {
+    for (const url of pendingPhotos.current.keys()) URL.revokeObjectURL(url);
+    pendingPhotos.current.clear();
+  }, []);
+  const categoryOptions = [...new Set([
+    ...categories,
+    work?.category || "Декор для дома",
+  ])];
+  async function upload(selectedFiles: FileList | null) {
+    // The input is reset after this call; preserve its files before any await.
+    const files = Array.from(selectedFiles ?? []);
+    if (!files.length) return;
     setError("");
     if (photos.length + files.length > 8) {
       setError("Можно добавить не больше 8 фотографий");
@@ -1053,20 +1065,19 @@ function WorkEditor({
     setBusy(true);
     try {
       for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         setProgress("Обрабатываем фото " + (i + 1) + " из " + files.length);
-        const blob = await compressPhoto(files[i]);
-        setProgress("Сохраняем фото " + (i + 1) + " из " + files.length);
-        const data = await uploadPhoto(blob);
-        setPhotos((p) => [
-          ...p,
-          { url: data.url, alt: title || files[i].name },
-        ]);
+        const blob = await compressPhoto(file);
+        const url = URL.createObjectURL(blob);
+        pendingPhotos.current.set(url, { blob });
+        const photo = { url, alt: title || file.name };
+        setPhotos((p) => [...p, photo]);
       }
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
-          : "Ошибка загрузки. Уже загруженные фото сохранены.",
+          : "Ошибка обработки фото. Уже добавленные фото остались в редакторе.",
       );
     } finally {
       setBusy(false);
@@ -1086,6 +1097,21 @@ function WorkEditor({
     setError("");
     setProgress("Сохраняем работу");
     try {
+      const savedPhotos: Photo[] = [];
+      for (const photo of photos) {
+        const pending = pendingPhotos.current.get(photo.url);
+        if (!pending) {
+          savedPhotos.push(photo);
+          continue;
+        }
+        if (!pending.uploaded) {
+          setProgress("Сохраняем фото " + (savedPhotos.length + 1) + " из " + photos.length);
+          const uploaded = await uploadPhoto(pending.blob);
+          pending.uploaded = { url: uploaded.url, alt: photo.alt };
+        }
+        savedPhotos.push(pending.uploaded);
+      }
+      setProgress("Сохраняем работу");
       const data = {
         title,
         description,
@@ -1096,7 +1122,7 @@ function WorkEditor({
         availability,
         status,
         featured,
-        photos,
+        photos: savedPhotos,
         revision: work?.revision,
       };
       const saved = await saveWork(work?.id ?? null, data);
@@ -1171,9 +1197,11 @@ function WorkEditor({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() =>
-                        setPhotos((p) => p.filter((_, n) => n !== i))
-                      }
+                      onClick={() => {
+                        URL.revokeObjectURL(p.url);
+                        pendingPhotos.current.delete(p.url);
+                        setPhotos((photos) => photos.filter((_, n) => n !== i));
+                      }}
                       aria-label="Убрать фото"
                     >
                       <X size={14} />
@@ -1214,19 +1242,31 @@ function WorkEditor({
         <div className="form-row">
           <label>
             Категория *
-            <input
-              list="categories"
-              required
-              maxLength={80}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+            <select
+              value={customCategory ? "" : category}
+              onChange={(e) => {
+                const value = e.target.value;
+                setCustomCategory(value === "");
+                setCategory(value);
+              }}
               disabled={busy}
-            />
-            <datalist id="categories">
-              {categories.map((c) => (
-                <option key={c} value={c} />
+            >
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
-            </datalist>
+              <option value="">Добавить свою категорию…</option>
+            </select>
+            {customCategory && (
+              <input
+                aria-label="Название новой категории"
+                required
+                maxLength={80}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Название категории"
+                disabled={busy}
+              />
+            )}
           </label>
           <label>
             Материал
