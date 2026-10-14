@@ -326,7 +326,7 @@ export default function Catalog() {
           ornaments={ornaments}
           ready={!loading && !error}
           onOpen={open}
-          stopMotion={motionPaused}
+          stopMotion={motionPaused || selected !== null}
         />
       )}
 

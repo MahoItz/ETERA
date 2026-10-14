@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Pause, Play, Sparkles, Flower2, Heart, Gift } from "lucide-react";
 import { visibleWorks, type Work } from "../lib/model";
 import "./tree-hero.css";
@@ -18,10 +18,8 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
   const [angle, setAngle] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true);
-  const [engaged, setEngaged] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const drag = useRef<{ x: number; lastX: number; moved: boolean; workId?: string; pointerId: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; lastX: number; moved: boolean; workId?: string; pointerId: number } | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(media.matches);
@@ -30,37 +28,41 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (paused || reduced || engaged || focused || dragging || stopMotion) return;
-    let id = 0, last = 0;
+    if (paused || reduced || dragging || stopMotion) return;
+    let id = 0, last = 0, elapsed = 0;
     const frame = (now: number) => {
-      if (last && !document.hidden) setAngle((a) => (a + Math.min(now - last, 50) * 0.00012) % TAU);
+      if (last && !document.hidden) {
+        const delta = Math.min(now - last, 50);
+        elapsed += delta;
+        // Ease back into automatic motion rather than starting at full speed.
+        const step = delta * 0.00012 * Math.min(elapsed / 300, 1);
+        setAngle((a) => (a + step) % TAU);
+      }
       last = now;
       id = requestAnimationFrame(frame);
     };
     id = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(id);
-  }, [paused, reduced, engaged, focused, dragging, stopMotion]);
+  }, [paused, reduced, dragging, stopMotion]);
   const turn = (direction: number) => {
-    setPaused(true);
-    setAngle((a) => a + direction * TAU / Math.max(items.length, 6));
+    setAngle((a) => (a + direction * TAU / Math.max(items.length, 6)) % TAU);
   };
   function pointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (!e.isPrimary || e.button !== 0) return;
+    if (!e.isPrimary || e.button !== 0 || drag.current) return;
     const button = (e.target as HTMLElement).closest<HTMLElement>("[data-work]");
-    drag.current = { x: e.clientX, lastX: e.clientX, moved: false, workId: button?.dataset.work, pointerId: e.pointerId };
+    drag.current = { x: e.clientX, y: e.clientY, lastX: e.clientX, moved: false, workId: button?.dataset.work, pointerId: e.pointerId };
     setDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function pointerMove(e: PointerEvent<HTMLDivElement>) {
     const current = drag.current;
     if (!current || current.pointerId !== e.pointerId) return;
-    if (Math.abs(e.clientX - current.x) > 7) current.moved = true;
+    if (Math.hypot(e.clientX - current.x, e.clientY - current.y) > 7) current.moved = true;
     if (current.moved) {
-      const delta = (e.clientX - current.lastX) * 0.009;
-      setAngle((a) => a + delta);
-      setPaused(true);
+      const delta = (e.clientX - current.lastX) / e.currentTarget.getBoundingClientRect().width * TAU;
+      setAngle((a) => (a + delta) % TAU);
+      current.lastX = e.clientX;
     }
-    current.lastX = e.clientX;
   }
   function pointerUp(e: PointerEvent<HTMLDivElement>) {
     const current = drag.current;
@@ -75,7 +77,8 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
   }
   const count = Math.max(items.length, 5);
   return <>
-    <section className="winter-hero" aria-label="Авторские украшения ручной работы">
+    <section className="winter-hero" aria-label="Авторские украшения ручной работы"
+      style={{ "--hero-background": `url("${import.meta.env.BASE_URL}images/hero-background.webp")` } as CSSProperties}>
       <div className="winter-dust" aria-hidden="true">{Array.from({ length: 22 }, (_, i) => <i key={i} style={{ left: `${(i * 43 + 7) % 100}%`, top: `${(i * 31 + 12) % 100}%`, animationDelay: `${i * -.7}s` }} />)}</div>
       <div className="winter-copy">
         <div className="winter-eyebrow"><Sparkles size={16} /> МАЛЕНЬКОЕ НОВОГОДНЕЕ ЧУДО <span /></div>
@@ -87,9 +90,12 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
       <div className="winter-tree-area">
         <div className={`winter-stage${dragging ? " is-dragging" : ""}`} tabIndex={0} role="group" aria-label="Вращающаяся ёлка с работами. Перетаскивайте или используйте стрелки на клавиатуре."
           onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}
-          onLostPointerCapture={() => { drag.current = null; setDragging(false); }}
-          onPointerEnter={() => setEngaged(true)} onPointerLeave={() => setEngaged(false)}
-          onFocusCapture={() => setFocused(true)} onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFocused(false); }}
+          onLostPointerCapture={() => {
+            if (drag.current) {
+              drag.current = null;
+              setDragging(false);
+            }
+          }}
           onKeyDown={(e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); turn(e.key === "ArrowLeft" ? -1 : 1); } }}>
           <div className="tree-halo" aria-hidden="true" />
           <svg className="ribbon-tree" viewBox="0 0 700 640" aria-hidden="true">
@@ -131,7 +137,9 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
           <button onClick={() => turn(-1)} aria-label="Повернуть ёлку влево"><ArrowLeft size={18} /></button>
           <span>{items.length ? "Поверните ёлку · выберите свою историю" : "Скоро здесь появятся новые истории"}</span>
           <button onClick={() => turn(1)} aria-label="Повернуть ёлку вправо"><ArrowRight size={18} /></button>
-          <button onClick={() => setPaused((p) => !p)} disabled={reduced || stopMotion} aria-label={paused ? "Включить вращение" : "Остановить вращение"} aria-pressed={paused}>{paused || reduced || stopMotion ? <Play size={15} /> : <Pause size={15} />}</button>
+          <button onClick={() => {
+            setPaused((p) => !p);
+          }} disabled={reduced || stopMotion} aria-label={paused ? "Включить вращение" : "Остановить вращение"} aria-pressed={paused}>{paused || reduced || stopMotion ? <Play size={15} /> : <Pause size={15} />}</button>
         </div>
       </div>
     </section>
