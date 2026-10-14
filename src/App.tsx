@@ -1,0 +1,1518 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import {
+  ArrowUpRight,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Flower2,
+  ImagePlus,
+  LockKeyhole,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Star,
+  X,
+  Loader2,
+} from "lucide-react";
+import {
+  defaults,
+  seed,
+  filterWorks,
+  visibleWorks,
+  type Work,
+  type Photo,
+  type Settings,
+} from "../lib/model";
+import {
+  getAdminSession,
+  loadCatalog,
+  saveSettings,
+  saveWork,
+  signIn,
+  signOut,
+  uploadPhoto,
+} from "./catalog";
+const money = (n: number | null) =>
+  n === null
+    ? "Цена по запросу"
+    : new Intl.NumberFormat("ru-RU").format(n) + " ₽";
+const labels = { available: "В наличии", order: "Под заказ", sold: "Продано" };
+const imageUrl = (url: string) =>
+  /^https?:\/\//.test(url)
+    ? url
+    : new URL(
+        url,
+        `${window.location.origin}${import.meta.env.BASE_URL}`,
+      ).toString();
+function Modal({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    d?.showModal();
+    return () => d?.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className={"modal " + (wide ? "wide" : "")}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
+      aria-label={title}
+    >
+      <div className="modal-head">
+        <h2>{title}</h2>
+        <button className="icon-button" onClick={onClose} aria-label="Закрыть">
+          <X size={22} />
+        </button>
+      </div>
+      {children}
+    </dialog>
+  );
+}
+async function compressPhoto(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+    throw new Error(
+      "Поддерживаются JPG, PNG и WebP. Фото HEIC сначала сохраните как JPG.",
+    );
+  if (file.size > 20 * 1024 * 1024)
+    throw new Error("Исходное фото должно быть меньше 20 МБ");
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bitmap.width * scale);
+    c.height = Math.round(bitmap.height * scale);
+    const context = c.getContext("2d");
+    if (!context) throw new Error("Браузер не смог обработать фото");
+    context.drawImage(bitmap, 0, 0, c.width, c.height);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      c.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("Ошибка обработки фото"))),
+        "image/webp",
+        0.82,
+      ),
+    );
+    if (blob.type !== "image/webp")
+      throw new Error("Браузер не поддерживает обработку WebP");
+    if (blob.size > 1500000)
+      throw new Error("Фотография слишком большая после сжатия");
+    return blob;
+  } finally {
+    bitmap.close();
+  }
+}
+function tilt(e: ReactPointerEvent<HTMLElement>) {
+  if (
+    e.currentTarget.closest(".motion-paused") ||
+    e.pointerType === "touch" ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+    return;
+  const el = e.currentTarget,
+    rect = el.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width - 0.5,
+    y = (e.clientY - rect.top) / rect.height - 0.5;
+  el.style.setProperty("--tilt-x", (-y * 5).toFixed(2) + "deg");
+  el.style.setProperty("--tilt-y", (x * 6).toFixed(2) + "deg");
+  el.style.setProperty("--move-x", (x * 14).toFixed(2) + "px");
+  el.style.setProperty("--move-y", (y * 12).toFixed(2) + "px");
+}
+function resetTilt(e: ReactPointerEvent<HTMLElement>) {
+  for (const name of ["--tilt-x", "--tilt-y", "--move-x", "--move-y"])
+    e.currentTarget.style.removeProperty(name);
+}
+function StudioHero({
+  works,
+  ready,
+  onOpen,
+  stopMotion,
+}: {
+  works: Work[];
+  ready: boolean;
+  onOpen: (work: Work) => void;
+  stopMotion: boolean;
+}) {
+  const items = visibleWorks(ready ? works : seed).slice(0, 4);
+  const [index, setIndex] = useState(0),
+    [paused, setPaused] = useState(false),
+    [reduced, setReduced] = useState(true),
+    [hovered, setHovered] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(m.matches);
+    update();
+    m.addEventListener("change", update);
+    return () => m.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (items.length < 2 || paused || reduced || hovered || stopMotion) return;
+    const id = setInterval(() => {
+      if (!document.hidden) setIndex((i) => (i + 1) % items.length);
+    }, 6500);
+    return () => clearInterval(id);
+  }, [items.length, paused, reduced, hovered, stopMotion]);
+  const active = items[index % Math.max(1, items.length)],
+    next = items[(index + 1) % Math.max(1, items.length)];
+  const open = (work: Work) => {
+    if (ready) onOpen(work);
+    else
+      document
+        .getElementById("catalog")
+        ?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+  };
+  return (
+    <>
+      <section className="hero" onPointerMove={tilt} onPointerLeave={resetTilt}>
+        <div className="hero-orbit orbit-one" aria-hidden="true" />
+        <div className="hero-orbit orbit-two" aria-hidden="true" />
+        <span className="hero-spark spark-one" aria-hidden="true">
+          ✳
+        </span>
+        <span className="hero-spark spark-two" aria-hidden="true">
+          ✧
+        </span>
+        <div className="hero-copy">
+          <div className="eyebrow">
+            <span />
+            МАЛЕНЬКАЯ МАСТЕРСКАЯ. БОЛЬШИЕ ЧУВСТВА.
+          </div>
+          <h1>
+            <span className="hero-line">Вещи, в которых</span>
+            <span className="hero-line">
+              <em>живёт</em> <span className="outlined-word">тепло.</span>
+            </span>
+          </h1>
+          <p>
+            Немного гипса. Много фантазии.
+            <br />И маленькая история для вашего дома.
+          </p>
+          <a className="button primary hero-cta" href="#catalog">
+            Найти свою историю{" "}
+            <span>
+              <ArrowUpRight size={21} />
+            </span>
+          </a>
+          <div className="hero-foot">
+            <span className="hero-foot-line" />
+            <span>Придумано. Отлито. Расписано вручную.</span>
+          </div>
+        </div>
+        <div
+          className="hero-art"
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+          onFocusCapture={() => setHovered(true)}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node))
+              setHovered(false);
+          }}
+        >
+          <div className="art-backplate" aria-hidden="true" />
+          <div className="art-label" aria-hidden="true">
+            HANDMADE
+            <br />
+            WITH LOVE
+          </div>
+          {active ? (
+            <div className="hero-parallax">
+              <button
+                className="hero-main"
+                onClick={() => open(active)}
+                aria-label={"Рассмотреть " + active.title}
+              >
+                <img
+                  key={active.id}
+                  src={imageUrl(active.photos[0]?.url || "")}
+                  alt={active.photos[0]?.alt || active.title}
+                  fetchPriority="high"
+                />
+                <span className="hero-caption">
+                  <span>{active.title}</span>
+                  <ArrowUpRight size={21} />
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div className="hero-empty">
+              <Flower2 size={80} strokeWidth={0.8} />
+              <span>Скоро здесь появятся новые работы</span>
+            </div>
+          )}
+          {next && items.length > 1 && (
+            <button
+              className="hero-small"
+              onClick={() => open(next)}
+              aria-label={"Рассмотреть " + next.title}
+            >
+              <img
+                key={next.id}
+                src={imageUrl(next.photos[0]?.url || "")}
+                alt={next.photos[0]?.alt || next.title}
+              />
+              <span>
+                {next.category} <ArrowUpRight size={16} />
+              </span>
+            </button>
+          )}
+          <div className="round-stamp" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <defs>
+                <path
+                  id="stamp-circle"
+                  d="M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0"
+                />
+              </defs>
+              <text>
+                <textPath href="#stamp-circle" textLength="264">
+                  СОЗДАНО С ДУШОЙ · СОЗДАНО С ДУШОЙ ·{" "}
+                </textPath>
+              </text>
+            </svg>
+            <Flower2 size={37} strokeWidth={1.1} />
+          </div>
+          <div className="hero-pagination">
+            <span>ИСТОРИИ МАСТЕРСКОЙ</span>
+            <div>
+              {items.map((w, i) => (
+                <button
+                  key={w.id}
+                  className={
+                    index % Math.max(1, items.length) === i ? "selected" : ""
+                  }
+                  onClick={() => {
+                    setIndex(i);
+                    setPaused(true);
+                  }}
+                  aria-label={"Показать " + w.title}
+                  aria-pressed={index % Math.max(1, items.length) === i}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </button>
+              ))}
+              {items.length > 1 && !reduced && (
+                <button
+                  className="pause-motion"
+                  onClick={() => setPaused((v) => !v)}
+                  aria-label={
+                    paused ? "Продолжить смену работ" : "Остановить смену работ"
+                  }
+                >
+                  {paused ? <Play size={13} /> : <Pause size={13} />}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <a className="hero-scroll" href="#catalog">
+          <span>ДАЛЬШЕ — КОЛЛЕКЦИЯ</span>
+          <ChevronDown size={15} />
+        </a>
+      </section>
+      <div
+        className="ribbon"
+        aria-label="Ручная работа. Маленькие радости. Для вашего дома."
+      >
+        <div className="ribbon-track" aria-hidden="true">
+          {[0, 1].map((i) => (
+            <div key={i}>
+              <span>ручная работа</span>
+              <Flower2 size={27} />
+              <span>маленькие радости</span>
+              <Sparkles size={25} />
+              <span>для вашего дома</span>
+              <Flower2 size={27} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+export default function Catalog() {
+  const motionRoot = useRef<HTMLDivElement>(null);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const [works, setWorks] = useState<Work[]>([]),
+    [settings, setSettings] = useState<Settings>(defaults),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  const [admin, setAdmin] = useState(false),
+    [loginOpen, setLoginOpen] = useState(false),
+    [scope, setScope] = useState("all"),
+    [query, setQuery] = useState(""),
+    [category, setCategory] = useState(""),
+    [sort, setSort] = useState("new"),
+    [limit, setLimit] = useState(24);
+  const [selected, setSelected] = useState<Work | null>(null),
+    [photoIndex, setPhotoIndex] = useState(0),
+    [editing, setEditing] = useState<Work | null | undefined>(undefined),
+    [showSettings, setShowSettings] = useState(false);
+  async function load() {
+    setError("");
+    setLoading(true);
+    try {
+      const [data, session] = await Promise.all([
+        loadCatalog(),
+        getAdminSession(),
+      ]);
+      setWorks(data.works);
+      setSettings(data.settings);
+      setAdmin(Boolean(session));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось загрузить каталог");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    load();
+  }, []);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
+  useEffect(() => {
+    setLimit(24);
+  }, [query, category, sort, scope, admin]);
+  useEffect(() => {
+    if (!selected || selected.photos.length < 2) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight")
+        setPhotoIndex((i) => (i + 1) % selected.photos.length);
+      if (e.key === "ArrowLeft")
+        setPhotoIndex(
+          (i) => (i + selected.photos.length - 1) % selected.photos.length,
+        );
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selected]);
+  useEffect(() => {
+    if (
+      motionPaused ||
+      !motionRoot.current ||
+      !("IntersectionObserver" in window)
+    )
+      return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (media.matches) return;
+    const elements = Array.from(
+      motionRoot.current.querySelectorAll<HTMLElement>("[data-reveal]"),
+    ).filter((el) => !el.classList.contains("is-visible"));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.07 },
+    );
+    for (const element of elements) {
+      element.classList.add("reveal-pending");
+      observer.observe(element);
+    }
+    const reduce = () => {
+      if (media.matches) {
+        for (const el of elements) el.classList.add("is-visible");
+        observer.disconnect();
+      }
+    };
+    media.addEventListener("change", reduce);
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", reduce);
+      for (const el of elements) el.classList.remove("reveal-pending");
+    };
+  }, [loading, admin, query, category, sort, scope, limit, motionPaused]);
+  const categories = [
+    ...new Set([...settings.categories, ...works.map((w) => w.category)]),
+  ];
+  const source = admin
+    ? works.filter(
+        (w) =>
+          scope === "all" ||
+          (scope === "draft"
+            ? w.status === "draft"
+            : scope === "archived"
+              ? w.status === "archived" || w.availability === "sold"
+              : w.status === "published" && w.availability !== "sold"),
+      )
+    : visibleWorks(works);
+  const filtered = filterWorks(source, query, category, sort);
+  function open(w: Work) {
+    setSelected(w);
+    setPhotoIndex(0);
+  }
+  function saved(w: Work) {
+    setWorks((list) => [w, ...list.filter((x) => x.id !== w.id)]);
+    setEditing(undefined);
+    setNotice("Работа сохранена. Она доступна и с другого устройства.");
+  }
+  return (
+    <div
+      ref={motionRoot}
+      className={
+        "studio-shell" +
+        (admin ? " editing-mode" : "") +
+        (motionPaused ? " motion-paused" : "")
+      }
+    >
+      <div className="private-bar">
+        <LockKeyhole size={12} />
+        <span>Приватный прототип · доступ только у вас</span>
+        <span className="bar-right">Ручная работа. Тёплые истории.</span>
+      </div>
+      <header className="header">
+        <a className="brand" href="#">
+          <span className="brand-symbol">
+            <Flower2 size={26} />
+          </span>
+          <span>
+            {settings.name}
+            <small>ДЕКОР С ХАРАКТЕРОМ</small>
+          </span>
+        </a>
+        <nav>
+          <a href="#catalog">Коллекция</a>
+          <a href="#story">О мастерской</a>
+        </nav>
+        <button
+          className={"admin-toggle " + (admin ? "active" : "")}
+          onClick={async () => {
+            if (admin) {
+              await signOut();
+              setAdmin(false);
+            } else setLoginOpen(true);
+          }}
+        >
+          <Settings2 size={16} />
+          <span>{admin ? "Выйти из редактора" : "Войти редактором"}</span>
+        </button>
+      </header>
+      {!admin && (
+        <StudioHero
+          works={works}
+          ready={!loading && !error}
+          onOpen={open}
+          stopMotion={motionPaused}
+        />
+      )}
+
+      <main id="catalog" className="catalog-section">
+        <div className="section-top" data-reveal>
+          <div>
+            <div className="eyebrow">
+              {admin ? "ВАША МАСТЕРСКАЯ" : "01 / ВЕЩИ С ХАРАКТЕРОМ"}
+            </div>
+            <h2>
+              {admin ? (
+                "Управление работами"
+              ) : (
+                <>
+                  Выберите свою <em>историю.</em>
+                </>
+              )}
+              <span className="count">
+                {admin ? works.length : visibleWorks(works).length}
+              </span>
+            </h2>
+          </div>
+          {admin ? (
+            <div className="admin-actions">
+              <button
+                className="button secondary"
+                onClick={() => setShowSettings(true)}
+              >
+                <Settings2 size={16} />
+                Настройки
+              </button>
+              <button
+                className="button primary"
+                onClick={() => setEditing(null)}
+              >
+                <Plus size={18} />
+                Добавить работу
+              </button>
+            </div>
+          ) : (
+            <span className="section-aside">
+              <span className="section-doodle">✳</span>Красивое рядом.
+              <br />
+              Нужно только присмотреться.
+            </span>
+          )}
+        </div>
+        {admin && (
+          <div className="editor-note">
+            <LockKeyhole size={16} />
+            <span>
+              Редактор защищён Supabase Auth и RLS. Публично видны только
+              опубликованные непроданные работы.
+            </span>
+          </div>
+        )}
+        <div className="toolbar" data-reveal>
+          <div className="category-tabs">
+            <button
+              className={!category ? "chosen" : ""}
+              onClick={() => setCategory("")}
+            >
+              Все работы
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c}
+                className={category === c ? "chosen" : ""}
+                onClick={() => setCategory(c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          <div className="search-sort">
+            <label className="search">
+              <Search size={17} />
+              <input
+                placeholder="Найти что-то особенное"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Поиск работ"
+              />
+              {query && (
+                <button
+                  className="clear-search"
+                  onClick={() => setQuery("")}
+                  aria-label="Очистить поиск"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </label>
+            <label className="sort">
+              <SlidersHorizontal size={16} />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                aria-label="Сортировка"
+              >
+                <option value="new">Сначала избранное и новое</option>
+                <option value="name">По названию</option>
+                <option value="price">По цене</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        {admin && (
+          <div className="scope-tabs">
+            {[
+              ["all", "Все"],
+              ["published", "В каталоге"],
+              ["draft", "Черновики"],
+              ["archived", "Архив и проданные"],
+            ].map(([k, v]) => (
+              <button
+                key={k}
+                className={scope === k ? "chosen" : ""}
+                onClick={() => setScope(k)}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
+        {error ? (
+          <div className="empty">
+            <h3>Не удалось загрузить работы</h3>
+            <p>{error}</p>
+            <button className="button primary" onClick={load}>
+              Попробовать снова
+            </button>
+          </div>
+        ) : loading ? (
+          <div className="loading">
+            <Loader2 className="spin" />
+            Загружаем коллекцию…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty">
+            <Flower2 size={34} />
+            <h3>
+              {query || category
+                ? "Пока ничего не нашлось"
+                : "Здесь появятся новые истории"}
+            </h3>
+            <p>
+              {query || category
+                ? "Попробуйте другое название или категорию."
+                : "Добавьте первую работу через редактор."}
+            </p>
+            {(query || category) && (
+              <button
+                className="button secondary"
+                onClick={() => {
+                  setQuery("");
+                  setCategory("");
+                }}
+              >
+                Сбросить фильтры
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid">
+            {filtered.slice(0, limit).map((w, i) => (
+              <article
+                key={w.id}
+                className={"work-card card-" + i}
+                data-reveal
+                style={{ transitionDelay: Math.min(i % 3, 2) * 70 + "ms" }}
+                onPointerMove={tilt}
+                onPointerLeave={resetTilt}
+              >
+                <span className="card-number" aria-hidden="true">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <button
+                  className="card-photo"
+                  onClick={() => open(w)}
+                  aria-label={"Рассмотреть " + w.title}
+                >
+                  {w.photos[0] ? (
+                    <img
+                      src={imageUrl(w.photos[0].url)}
+                      alt={w.photos[0].alt || w.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="photo-placeholder">
+                      <ImagePlus size={34} />
+                    </div>
+                  )}
+                  <span className="status-pill">
+                    {admin && w.status !== "published"
+                      ? w.status === "draft"
+                        ? "Черновик"
+                        : "Архив"
+                      : labels[w.availability]}
+                  </span>
+                  {w.featured && (
+                    <span
+                      className="featured-icon"
+                      aria-label="Избранная работа"
+                    >
+                      <Star size={15} />
+                    </span>
+                  )}
+                  <span className="photo-open">
+                    <ArrowUpRight size={23} />
+                  </span>
+                </button>
+                <div className="card-info">
+                  <span className="card-category">
+                    {w.category} · {w.material || "Ручная работа"}
+                  </span>
+                  <button className="title-button" onClick={() => open(w)}>
+                    <h3>{w.title}</h3>
+                    <ArrowUpRight size={18} />
+                  </button>
+                  <div className="card-bottom">
+                    <span>{money(w.price)}</span>
+                    <span>{w.photos.length} фото</span>
+                  </div>
+                  {admin && (
+                    <button className="edit-card" onClick={() => setEditing(w)}>
+                      Редактировать работу <Settings2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        {filtered.length > limit && (
+          <button
+            className="button secondary more"
+            onClick={() => setLimit((n) => n + 24)}
+          >
+            Показать ещё {Math.min(24, filtered.length - limit)} работ{" "}
+            <ChevronDown size={17} />
+          </button>
+        )}
+        {!admin && (
+          <div className="collection-note" data-reveal>
+            <Sparkles size={24} />
+            <p>
+              Двух одинаковых историй не бывает. Ручная роспись делает каждую
+              работу особенной.
+            </p>
+          </div>
+        )}
+      </main>
+      {!admin && (
+        <section id="story" className="story">
+          <div className="story-top" data-reveal>
+            <div className="eyebrow">02 / ТЕПЛО РУЧНОЙ РАБОТЫ</div>
+            <span>Маленькая мастерская. Свой большой мир.</span>
+          </div>
+          <div className="story-layout">
+            <div className="story-picture" data-reveal>
+              <div className="story-image-wrap">
+                <img
+                  src={imageUrl("images/fairies.jpg")}
+                  alt="Детали ручной росписи фей-балерин"
+                  loading="lazy"
+                />
+              </div>
+              <span className="story-image-note">
+                Немного цвета — и появляется характер.
+              </span>
+              <Flower2
+                className="story-flower"
+                size={96}
+                strokeWidth={0.8}
+                aria-hidden="true"
+              />
+            </div>
+            <div className="story-copy" data-reveal>
+              <h2>
+                Не просто декор.
+                <br />
+                <em>Маленькое чувство.</em>
+              </h2>
+              <p>
+                Небольшие вещи, в которых остаётся тепло рук. Гипс, кисти,
+                немного цвета — и простая фигурка обретает свой характер.
+              </p>
+              <p>
+                Для полки, на которой не хватало чего-то особенного. Для подарка
+                человеку, которого хочется порадовать. Или просто — для себя.
+              </p>
+              <div className="story-tags">
+                <span>Ручная роспись</span>
+                <span>Ваше настроение</span>
+                <span>Живые детали</span>
+              </div>
+              {settings.contact ? (
+                <a
+                  className="button primary"
+                  href={settings.contact}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Обсудить свою историю <ArrowUpRight size={18} />
+                </a>
+              ) : (
+                <p className="contact-unset">
+                  Контакт мастера появится здесь после настройки.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="story-signature" aria-hidden="true">
+            сделано с душой<span>✧</span>
+          </div>
+        </section>
+      )}
+
+      <footer>
+        <a className="footer-brand" href="#">
+          <Flower2 size={23} />
+          {settings.name}
+        </a>
+        <span>Маленькие вещи. Большое тепло.</span>
+        <div className="footer-controls">
+          <button
+            className="motion-toggle"
+            onClick={() => setMotionPaused((v) => !v)}
+            aria-pressed={motionPaused}
+          >
+            {motionPaused ? <Play size={12} /> : <Pause size={12} />}Анимации:{" "}
+            {motionPaused ? "выкл" : "вкл"}
+          </button>
+          <small>
+            <LockKeyhole size={12} />
+            Приватный просмотр
+          </small>
+        </div>
+      </footer>
+      {notice && (
+        <div className="toast" role="status">
+          <Check size={19} />
+          {notice}
+        </div>
+      )}
+      {selected && (
+        <Modal title={selected.title} onClose={() => setSelected(null)} wide>
+          <div className="detail">
+            <div className="gallery">
+              <div className="gallery-main">
+                {selected.photos[photoIndex] ? (
+                  <img
+                    key={selected.id + "-" + photoIndex}
+                    src={imageUrl(selected.photos[photoIndex].url)}
+                    alt={selected.photos[photoIndex].alt || selected.title}
+                  />
+                ) : (
+                  <ImagePlus />
+                )}
+                {selected.photos.length > 1 && (
+                  <>
+                    <button
+                      className="gallery-arrow prev"
+                      onClick={() =>
+                        setPhotoIndex(
+                          (i) =>
+                            (i + selected.photos.length - 1) %
+                            selected.photos.length,
+                        )
+                      }
+                      aria-label="Предыдущее фото"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+                    <button
+                      className="gallery-arrow next"
+                      onClick={() =>
+                        setPhotoIndex((i) => (i + 1) % selected.photos.length)
+                      }
+                      aria-label="Следующее фото"
+                    >
+                      <ArrowRight size={20} />
+                    </button>
+                  </>
+                )}
+                <span className="gallery-count">
+                  {selected.photos.length ? photoIndex + 1 : 0} /{" "}
+                  {selected.photos.length}
+                </span>
+              </div>
+              {selected.photos.length > 1 && (
+                <div className="thumbnails">
+                  {selected.photos.map((p, i) => (
+                    <button
+                      key={p.url + i}
+                      className={photoIndex === i ? "selected" : ""}
+                      onClick={() => setPhotoIndex(i)}
+                      aria-label={"Фото " + (i + 1)}
+                    >
+                      <img src={imageUrl(p.url)} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="detail-copy">
+              <div className="eyebrow">{selected.category}</div>
+              <h2>{selected.title}</h2>
+              <span className="availability">
+                <span />
+                {labels[selected.availability]}
+              </span>
+              <p>{selected.description}</p>
+              <dl>
+                {selected.material && (
+                  <>
+                    <dt>Материал</dt>
+                    <dd>{selected.material}</dd>
+                  </>
+                )}
+                {selected.dimensions && (
+                  <>
+                    <dt>Размеры</dt>
+                    <dd>{selected.dimensions}</dd>
+                  </>
+                )}
+                <dt>Исполнение</dt>
+                <dd>Ручная работа</dd>
+              </dl>
+              <strong className="price">{money(selected.price)}</strong>
+              {settings.contact ? (
+                <a
+                  href={settings.contact}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button primary"
+                >
+                  Обсудить с мастером <ArrowUpRight size={18} />
+                </a>
+              ) : (
+                <p className="contact-unset">
+                  Контакт можно добавить в настройках редактора.
+                </p>
+              )}
+              {admin && (
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setEditing(selected);
+                    setSelected(null);
+                  }}
+                >
+                  Редактировать
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {editing !== undefined && (
+        <WorkEditor
+          work={editing}
+          categories={categories}
+          onClose={() => setEditing(undefined)}
+          onSaved={saved}
+        />
+      )}
+      {loginOpen && (
+        <LoginEditor
+          onClose={() => setLoginOpen(false)}
+          onLoggedIn={async () => {
+            setLoginOpen(false);
+            await load();
+          }}
+        />
+      )}
+      {showSettings && (
+        <SettingsEditor
+          settings={settings}
+          onClose={() => setShowSettings(false)}
+          onSaved={(s) => {
+            setSettings(s);
+            setShowSettings(false);
+            setNotice("Настройки сохранены");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+function WorkEditor({
+  work,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  work: Work | null;
+  categories: string[];
+  onClose: () => void;
+  onSaved: (w: Work) => void;
+}) {
+  const [title, setTitle] = useState(work?.title || ""),
+    [description, setDescription] = useState(work?.description || ""),
+    [category, setCategory] = useState(
+      work?.category || categories[0] || "Декор для дома",
+    ),
+    [material, setMaterial] = useState(work?.material || "Гипс"),
+    [dimensions, setDimensions] = useState(work?.dimensions || ""),
+    [price, setPrice] = useState(work?.price?.toString() || ""),
+    [availability, setAvailability] = useState(work?.availability || "order"),
+    [status, setStatus] = useState(work?.status || "draft"),
+    [featured, setFeatured] = useState(work?.featured || false),
+    [photos, setPhotos] = useState<Photo[]>(work?.photos || []),
+    [busy, setBusy] = useState(false),
+    [progress, setProgress] = useState(""),
+    [error, setError] = useState("");
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+    if (photos.length + files.length > 8) {
+      setError("Можно добавить не больше 8 фотографий");
+      return;
+    }
+    setBusy(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        setProgress("Обрабатываем фото " + (i + 1) + " из " + files.length);
+        const blob = await compressPhoto(files[i]);
+        setProgress("Сохраняем фото " + (i + 1) + " из " + files.length);
+        const data = await uploadPhoto(blob);
+        setPhotos((p) => [
+          ...p,
+          { url: data.url, alt: title || files[i].name },
+        ]);
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Ошибка загрузки. Уже загруженные фото сохранены.",
+      );
+    } finally {
+      setBusy(false);
+      setProgress("");
+    }
+  }
+  function move(i: number, delta: number) {
+    setPhotos((p) => {
+      const copy = [...p];
+      [copy[i], copy[i + delta]] = [copy[i + delta], copy[i]];
+      return copy;
+    });
+  }
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setProgress("Сохраняем работу");
+    try {
+      const data = {
+        title,
+        description,
+        category,
+        material,
+        dimensions,
+        price: price.trim() ? Number(price) : null,
+        availability,
+        status,
+        featured,
+        photos,
+        revision: work?.revision,
+      };
+      const saved = await saveWork(work?.id ?? null, data);
+      onSaved(saved);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка сохранения");
+    } finally {
+      setBusy(false);
+      setProgress("");
+    }
+  }
+  return (
+    <Modal
+      title={work ? "Редактировать работу" : "Новая работа"}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <form onSubmit={submit} className="editor-form">
+        <p className="form-intro">
+          Добавьте фотографии и пару слов. Остальное можно заполнить позже.
+        </p>
+        <div className="upload-area">
+          <ImagePlus size={26} />
+          <strong>Фотографии работы</strong>
+          <span>До 8 фото · JPG, PNG, WebP · сжатие автоматически</span>
+          <label
+            className={"button secondary " + (busy ? "disabled" : "")}
+            htmlFor="photo-upload"
+          >
+            Выбрать с устройства <Plus size={16} />
+          </label>
+          <input
+            id="photo-upload"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={busy}
+            onChange={(e) => {
+              upload(e.target.files);
+              e.target.value = "";
+            }}
+            className="visually-hidden"
+          />
+        </div>
+        {photos.length > 0 && (
+          <>
+            <div className="upload-photos">
+              {photos.map((p, i) => (
+                <div key={p.url} className="upload-thumb">
+                  <img src={imageUrl(p.url)} alt={"Фото " + (i + 1)} />
+                  <span className="thumb-number">
+                    {i === 0 ? "Обложка" : i + 1}
+                  </span>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={i === 0 || busy}
+                      onClick={() => move(i, -1)}
+                      aria-label="Переместить фото влево"
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === photos.length - 1 || busy}
+                      onClick={() => move(i, 1)}
+                      aria-label="Переместить фото вправо"
+                    >
+                      <ArrowRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        setPhotos((p) => p.filter((_, n) => n !== i))
+                      }
+                      aria-label="Убрать фото"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="hint">
+              Первое фото — обложка. Для полной истории рекомендуем 3–8
+              фотографий.
+            </p>
+          </>
+        )}
+        <label>
+          Название *
+          <input
+            autoFocus
+            required
+            maxLength={120}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Например, барашек с золотым бантом"
+            disabled={busy}
+          />
+        </label>
+        <label>
+          Описание
+          <textarea
+            rows={3}
+            maxLength={4000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Что особенного в этой работе?"
+            disabled={busy}
+          />
+        </label>
+        <div className="form-row">
+          <label>
+            Категория *
+            <input
+              list="categories"
+              required
+              maxLength={80}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              disabled={busy}
+            />
+            <datalist id="categories">
+              {categories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            Материал
+            <input
+              maxLength={100}
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+        </div>
+        <div className="form-row">
+          <label>
+            Размеры
+            <input
+              maxLength={150}
+              value={dimensions}
+              onChange={(e) => setDimensions(e.target.value)}
+              placeholder="Например, 8 × 5 см"
+              disabled={busy}
+            />
+          </label>
+          <label>
+            Цена, ₽ <span className="optional">необязательно</span>
+            <input
+              type="number"
+              min={0}
+              max={10000000}
+              step="any"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="По запросу"
+              disabled={busy}
+            />
+          </label>
+        </div>
+        <div className="form-row">
+          <label>
+            Доступность
+            <select
+              value={availability}
+              onChange={(e) =>
+                setAvailability(e.target.value as Work["availability"])
+              }
+              disabled={busy}
+            >
+              <option value="available">В наличии</option>
+              <option value="order">Под заказ</option>
+              <option value="sold">Продано</option>
+            </select>
+          </label>
+          <label>
+            Показ в каталоге
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Work["status"])}
+              disabled={busy}
+            >
+              <option value="draft">Черновик</option>
+              <option value="published">В каталоге</option>
+              <option value="archived">Архив</option>
+            </select>
+          </label>
+        </div>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={featured}
+            onChange={(e) => setFeatured(e.target.checked)}
+            disabled={busy}
+          />
+          Закрепить работу в начале каталога
+        </label>
+        <p className="hint">
+          Проданные и архивные работы видны только в редакторе. Статус «В
+          каталоге» не меняет приватность сайта.
+        </p>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Отмена
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? (
+              <>
+                <Loader2 size={17} className="spin" />
+                {progress || "Сохраняем…"}
+              </>
+            ) : (
+              <>
+                <Check size={17} />
+                Сохранить работу
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+function SettingsEditor({
+  settings,
+  onClose,
+  onSaved,
+}: {
+  settings: Settings;
+  onClose: () => void;
+  onSaved: (s: Settings) => void;
+}) {
+  const [name, setName] = useState(settings.name),
+    [contact, setContact] = useState(settings.contact),
+    [categories, setCategories] = useState(settings.categories.join("\n")),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      onSaved(
+        await saveSettings({
+          name,
+          contact,
+          categories: categories
+            .split("\n")
+            .map((c) => c.trim())
+            .filter(Boolean),
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка сохранения");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      title="Настройки мастерской"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <form className="editor-form" onSubmit={submit}>
+        <label>
+          Название мастерской
+          <input
+            value={name}
+            required
+            maxLength={80}
+            onChange={(e) => setName(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <label>
+          Ссылка для связи
+          <input
+            type="url"
+            placeholder="https://t.me/имя"
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <p className="hint">
+          Telegram, VK или Instagram. Ссылка появится в карточках работ.
+        </p>
+        <label>
+          Категории, по одной на строку
+          <textarea
+            rows={5}
+            value={categories}
+            onChange={(e) => setCategories(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <p className="hint">
+          Категорию также можно написать при добавлении работы. Удаление из
+          этого списка не меняет существующие карточки.
+        </p>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Отмена
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? "Сохраняем…" : "Сохранить"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+function LoginEditor({
+  onClose,
+  onLoggedIn,
+}: {
+  onClose: () => void;
+  onLoggedIn: () => Promise<void>;
+}) {
+  const [email, setEmail] = useState(""),
+    [password, setPassword] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await signIn(email, password);
+      await onLoggedIn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось войти");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      title="Вход редактора"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <form className="editor-form" onSubmit={submit}>
+        <p className="form-intro">
+          Войдите с учётной записью администратора Supabase.
+        </p>
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <label>
+          Пароль
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Отмена
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? "Входим…" : "Войти"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}

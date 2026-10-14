@@ -1,0 +1,2 @@
+import {guard,handled,readCatalog} from '../../../lib/server';
+export async function GET(req:Request){return handled(async()=>{guard(req);const c=await readCatalog();return new Response(JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),...c},null,2),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="catalog-metadata.json"','Cache-Control':'no-store'}});});}

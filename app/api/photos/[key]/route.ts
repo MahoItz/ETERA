@@ -1,0 +1,2 @@
+import {guard,handled,env,ApiError} from '../../../../lib/server';
+export async function GET(req:Request,{params}:{params:Promise<{key:string}>}){return handled(async()=>{guard(req);const {key}=await params;if(!/^[a-f0-9-]+\.webp$/.test(key))throw new ApiError(404,'Фото не найдено');const object=await env.BUCKET!.get(key);if(!object)throw new ApiError(404,'Фото не найдено');return new Response(object.body,{headers:{'Content-Type':'image/webp','Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex'}});});}

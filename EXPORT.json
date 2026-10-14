@@ -1,0 +1,14 @@
+{
+  "siteProjectId": "appgprj_6ace1deb598481918cfd4ea96ddb6a49",
+  "siteVersion": 2,
+  "sourceCommit": "db805534d8b279a17713e67a150bdedc321074ff",
+  "localOnly": true,
+  "changesFromHostedSource": [
+    "scripts/setup-local.mjs",
+    "package.json scripts/name",
+    "README.md",
+    "START-HERE.txt",
+    "snapshot/catalog.json and any referenced uploads",
+    ".gitignore .local/"
+  ]
+}
