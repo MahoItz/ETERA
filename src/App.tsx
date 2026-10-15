@@ -424,19 +424,12 @@ export default function Catalog() {
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
           <div>
-            <div className="eyebrow">01 / ВЕЩИ С ХАРАКТЕРОМ</div>
             <h2>
-              Выберите свою <em>историю.</em>
-              <span className="count">{source.length}</span>
+              Выберите <em>украшение</em>
             </h2>
           </div>
-          <div className="section-tools">
-            <span className="section-aside">
-              <span className="section-doodle">✳</span>Красивое рядом.
-              <br />
-              Нужно только присмотреться.
-            </span>
-            {canEdit && (
+          {canEdit && (
+            <div className="section-tools">
               <button
                 className="button primary"
                 onClick={() => setEditing(null)}
@@ -444,8 +437,8 @@ export default function Catalog() {
                 <Plus size={18} />
                 Добавить работу
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         <div className="toolbar" data-reveal>
           <div className="category-controls">
