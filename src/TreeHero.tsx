@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Pause, Play, Sparkles, Flower2, Heart, Gift } from "lucide-react";
 import { visibleWorks, type Work } from "../lib/model";
 import "./tree-hero.css";
@@ -17,8 +17,9 @@ const treeLevels = [
   { y: 81, radius: 26, scale: 1.14 },
 ] as const;
 
-export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
+export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorActions }: {
   works: Work[]; ornaments: TreeOrnament[]; ready: boolean; onOpen: (work: Work) => void; stopMotion: boolean;
+  editorActions?: ReactNode;
 }) {
   const published = visibleWorks(works);
   const selected = treeItems(works, ornaments);
@@ -154,6 +155,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
             setPaused((p) => !p);
           }} disabled={reduced || stopMotion} aria-label={paused ? "Включить вращение" : "Остановить вращение"} aria-pressed={paused}>{paused || reduced || stopMotion ? <Play size={15} /> : <Pause size={15} />}</button>
         </div>
+        {editorActions && <div className="tree-editor-actions" role="group" aria-label="Управление украшениями">{editorActions}</div>}
       </div>
     </section>
     <div className="winter-values"><div><Flower2 /><span>РУЧНАЯ РАБОТА<small>С ЛЮБОВЬЮ</small></span></div><div><Gift /><span>МАЛЕНЬКИЕ РАДОСТИ<small>БОЛЬШИЕ ЧУВСТВА</small></span></div><div><Heart /><span>ДЛЯ ВАШЕГО ДОМА<small>И ОСОБЫХ МОМЕНТОВ</small></span></div></div>

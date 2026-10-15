@@ -16,15 +16,19 @@ import {
   ChevronDown,
   Flower2,
   ImagePlus,
+  Eye,
+  LogOut,
   LockKeyhole,
   Pause,
   Play,
   Plus,
+  Pencil,
   Search,
   Settings2,
   SlidersHorizontal,
   Sparkles,
   Star,
+  UserRound,
   X,
   Loader2,
 } from "lucide-react";
@@ -154,25 +158,30 @@ function resetTilt(e: ReactPointerEvent<HTMLElement>) {
 }
 export default function Catalog() {
   const motionRoot = useRef<HTMLDivElement>(null);
+  const accountMenu = useRef<HTMLDetailsElement>(null);
   const [motionPaused, setMotionPaused] = useState(false);
   const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
-  const [showTreeEditor, setShowTreeEditor] = useState(false);
+  const [treeEditor, setTreeEditor] = useState<"add" | "manage" | null>(null);
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [admin, setAdmin] = useState(false),
+    [editingEnabled, setEditingEnabled] = useState(true),
+    [signingOut, setSigningOut] = useState(false),
+    [accountError, setAccountError] = useState(""),
     [loginOpen, setLoginOpen] = useState(false),
-    [scope, setScope] = useState("all"),
+    [scope, setScope] = useState("published"),
     [query, setQuery] = useState(""),
     [category, setCategory] = useState(""),
     [sort, setSort] = useState("new"),
     [limit, setLimit] = useState(24);
   const [selected, setSelected] = useState<Work | null>(null),
     [photoIndex, setPhotoIndex] = useState(0),
-    [editing, setEditing] = useState<Work | null | undefined>(undefined),
-    [showSettings, setShowSettings] = useState(false);
+    [editing, setEditing] = useState<Work | null | undefined>(undefined);
+  const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
+  const canEdit = admin && editingEnabled;
   async function load() {
     setError("");
     setLoading(true);
@@ -195,13 +204,23 @@ export default function Catalog() {
     load();
   }, []);
   useEffect(() => {
+    const closeMenu = (event: PointerEvent) => {
+      const menu = accountMenu.current;
+      if (menu && event.target instanceof Node && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, []);
+  useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(t);
   }, [notice]);
   useEffect(() => {
     setLimit(24);
-  }, [query, category, sort, scope, admin]);
+  }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
     if (!selected || selected.photos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
@@ -254,11 +273,15 @@ export default function Catalog() {
       media.removeEventListener("change", reduce);
       for (const el of elements) el.classList.remove("reveal-pending");
     };
-  }, [loading, admin, query, category, sort, scope, limit, motionPaused]);
+  }, [loading, canEdit, query, category, sort, scope, limit, motionPaused]);
+  const publicWorks = visibleWorks(works);
   const categories = [
-    ...new Set([...settings.categories, ...works.map((w) => w.category)]),
+    ...new Set([
+      ...settings.categories,
+      ...(canEdit ? works : publicWorks).map((w) => w.category),
+    ]),
   ];
-  const source = admin
+  const source = canEdit
     ? works.filter(
         (w) =>
           scope === "all" ||
@@ -268,7 +291,7 @@ export default function Catalog() {
               ? w.status === "archived" || w.availability === "sold"
               : w.status === "published" && w.availability !== "sold"),
       )
-    : visibleWorks(works);
+    : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
   function open(w: Work) {
     setSelected(w);
@@ -276,17 +299,50 @@ export default function Catalog() {
   }
   function saved(w: Work) {
     setWorks((list) => [w, ...list.filter((x) => x.id !== w.id)]);
+    setScope(
+      w.status === "draft" ? "draft"
+        : w.status === "archived" || w.availability === "sold" ? "archived"
+          : "published",
+    );
+    setQuery("");
+    setCategory("");
     setEditing(undefined);
     setNotice("Работа сохранена. Она доступна и с другого устройства.");
+  }
+  function toggleEditing() {
+    setEditingEnabled((enabled) => !enabled);
+    setScope("published");
+    setCategory("");
+    setEditing(undefined);
+    setTreeEditor(null);
+    setSettingsSection(null);
+    setSelected(null);
+    if (accountMenu.current) accountMenu.current.open = false;
+  }
+  async function logout() {
+    setSigningOut(true);
+    setAccountError("");
+    try {
+      await signOut();
+      setAdmin(false);
+      setEditingEnabled(true);
+      setWorks((items) => visibleWorks(items));
+      setSelected(null);
+      setEditing(undefined);
+      setTreeEditor(null);
+      setSettingsSection(null);
+      setScope("published");
+      setCategory("");
+    } catch (e) {
+      setAccountError(e instanceof Error ? e.message : "Не удалось выйти. Попробуйте ещё раз.");
+    } finally {
+      setSigningOut(false);
+    }
   }
   return (
     <div
       ref={motionRoot}
-      className={
-        "studio-shell" +
-        (admin ? " editing-mode" : "") +
-        (motionPaused ? " motion-paused" : "")
-      }
+      className={"studio-shell" + (motionPaused ? " motion-paused" : "")}
     >
       <div className="private-bar">
         <LockKeyhole size={12} />
@@ -307,60 +363,85 @@ export default function Catalog() {
           <a href="#catalog">Коллекция</a>
           <a href="#story">О мастерской</a>
         </nav>
-        <button
-          className={"admin-toggle " + (admin ? "active" : "")}
-          onClick={async () => {
-            if (admin) {
-              await signOut();
-              setAdmin(false);
-            } else setLoginOpen(true);
-          }}
-        >
-          <Settings2 size={16} />
-          <span>{admin ? "Выйти из редактора" : "Войти редактором"}</span>
-        </button>
+        {admin ? (
+          <details
+            className="account-menu"
+            ref={accountMenu}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }
+            }}
+            onBlur={(event) => {
+              if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) {
+                event.currentTarget.open = false;
+              }
+            }}
+          >
+            <summary className="admin-toggle">
+              <UserRound size={16} /><span>Аккаунт</span><ChevronDown size={13} />
+            </summary>
+            <div className="account-panel">
+              <span className="account-caption">Администратор</span>
+              <button type="button" onClick={toggleEditing} disabled={signingOut} aria-pressed={editingEnabled}>
+                {editingEnabled ? <Eye size={16} /> : <Pencil size={16} />}
+                {editingEnabled ? "Скрыть кнопки редактирования" : "Показать кнопки редактирования"}
+              </button>
+              <button
+                type="button"
+                disabled={signingOut}
+                onClick={() => {
+                  setSettingsSection("general");
+                  if (accountMenu.current) accountMenu.current.open = false;
+                }}
+              >
+                <Settings2 size={16} />Настройки сайта
+              </button>
+              <button type="button" disabled={signingOut} onClick={() => void logout()}>
+                <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
+              </button>
+              {accountError && <p className="form-error" role="alert">{accountError}</p>}
+            </div>
+          </details>
+        ) : (
+          <button className="admin-toggle" onClick={() => setLoginOpen(true)} disabled={loading}>
+            <UserRound size={16} /><span>Войти</span>
+          </button>
+        )}
       </header>
-      {!admin && (
-        <TreeHero
-          works={works}
-          ornaments={ornaments}
-          ready={!loading && !error}
-          onOpen={open}
-          stopMotion={motionPaused || selected !== null}
-        />
-      )}
+      <TreeHero
+        works={works}
+        ornaments={ornaments}
+        ready={!loading && !error}
+        onOpen={open}
+        stopMotion={motionPaused || selected !== null}
+        editorActions={canEdit ? <>
+          <button className="button primary" onClick={() => setTreeEditor("add")}>
+            <Plus size={16} />Добавить украшение
+          </button>
+          <button className="button secondary" onClick={() => setTreeEditor("manage")}>
+            <Settings2 size={16} />Управлять украшениями
+          </button>
+        </> : undefined}
+      />
 
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
           <div>
-            <div className="eyebrow">
-              {admin ? "ВАША МАСТЕРСКАЯ" : "01 / ВЕЩИ С ХАРАКТЕРОМ"}
-            </div>
+            <div className="eyebrow">01 / ВЕЩИ С ХАРАКТЕРОМ</div>
             <h2>
-              {admin ? (
-                "Управление работами"
-              ) : (
-                <>
-                  Выберите свою <em>историю.</em>
-                </>
-              )}
-              <span className="count">
-                {admin ? works.length : visibleWorks(works).length}
-              </span>
+              Выберите свою <em>историю.</em>
+              <span className="count">{source.length}</span>
             </h2>
           </div>
-          {admin ? (
-            <div className="admin-actions">
-              <button className="button secondary" onClick={() => setShowTreeEditor(true)}>
-                <Sparkles size={16} /> Работы на ёлке
-              </button>
-              <button
-                className="button secondary"
-                onClick={() => setShowSettings(true)}
-              >
-                <Settings2 size={16} />
-                Настройки
-              </button>
+          <div className="section-tools">
+            <span className="section-aside">
+              <span className="section-doodle">✳</span>Красивое рядом.
+              <br />
+              Нужно только присмотреться.
+            </span>
+            {canEdit && (
               <button
                 className="button primary"
                 onClick={() => setEditing(null)}
@@ -368,41 +449,33 @@ export default function Catalog() {
                 <Plus size={18} />
                 Добавить работу
               </button>
-            </div>
-          ) : (
-            <span className="section-aside">
-              <span className="section-doodle">✳</span>Красивое рядом.
-              <br />
-              Нужно только присмотреться.
-            </span>
-          )}
-        </div>
-        {admin && (
-          <div className="editor-note">
-            <LockKeyhole size={16} />
-            <span>
-              Редактор защищён Supabase Auth и RLS. Публично видны только
-              опубликованные непроданные работы.
-            </span>
+            )}
           </div>
-        )}
+        </div>
         <div className="toolbar" data-reveal>
-          <div className="category-tabs">
-            <button
-              className={!category ? "chosen" : ""}
-              onClick={() => setCategory("")}
-            >
-              Все работы
-            </button>
-            {categories.map((c) => (
+          <div className="category-controls">
+            <div className="category-tabs">
               <button
-                key={c}
-                className={category === c ? "chosen" : ""}
-                onClick={() => setCategory(c)}
+                className={!category ? "chosen" : ""}
+                onClick={() => setCategory("")}
               >
-                {c}
+                Все работы
               </button>
-            ))}
+              {categories.map((c) => (
+                <button
+                  key={c}
+                  className={category === c ? "chosen" : ""}
+                  onClick={() => setCategory(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            {canEdit && (
+              <button className="context-action" onClick={() => setSettingsSection("categories")}>
+                <Settings2 size={15} />Редактировать категории
+              </button>
+            )}
           </div>
           <div className="search-sort">
             <label className="search">
@@ -437,13 +510,13 @@ export default function Catalog() {
             </label>
           </div>
         </div>
-        {admin && (
+        {canEdit && (
           <div className="scope-tabs">
             {[
-              ["all", "Все"],
               ["published", "В каталоге"],
               ["draft", "Черновики"],
               ["archived", "Архив и проданные"],
+              ["all", "Все"],
             ].map(([k, v]) => (
               <button
                 key={k}
@@ -479,7 +552,9 @@ export default function Catalog() {
             <p>
               {query || category
                 ? "Попробуйте другое название или категорию."
-                : "Добавьте первую работу через редактор."}
+                : canEdit
+                  ? "Нажмите «Добавить работу», чтобы пополнить каталог. Если работа уже есть, проверьте черновики и архив."
+                  : "Скоро здесь появятся новые работы."}
             </p>
             {(query || category) && (
               <button
@@ -524,7 +599,7 @@ export default function Catalog() {
                     </div>
                   )}
                   <span className="status-pill">
-                    {admin && w.status !== "published"
+                    {canEdit && w.status !== "published"
                       ? w.status === "draft"
                         ? "Черновик"
                         : "Архив"
@@ -554,7 +629,7 @@ export default function Catalog() {
                     <span>{money(w.price)}</span>
                     <span>{w.photos.length} фото</span>
                   </div>
-                  {admin && (
+                  {canEdit && (
                     <button className="edit-card" onClick={() => setEditing(w)}>
                       Редактировать работу <Settings2 size={14} />
                     </button>
@@ -573,7 +648,6 @@ export default function Catalog() {
             <ChevronDown size={17} />
           </button>
         )}
-        {!admin && (
           <div className="collection-note" data-reveal>
             <Sparkles size={24} />
             <p>
@@ -581,9 +655,7 @@ export default function Catalog() {
               работу особенной.
             </p>
           </div>
-        )}
       </main>
-      {!admin && (
         <section id="story" className="story">
           <div className="story-top" data-reveal>
             <div className="eyebrow">02 / ТЕПЛО РУЧНОЙ РАБОТЫ</div>
@@ -647,7 +719,6 @@ export default function Catalog() {
             сделано с душой<span>✧</span>
           </div>
         </section>
-      )}
 
       <footer>
         <a className="footer-brand" href="#">
@@ -775,7 +846,7 @@ export default function Catalog() {
                   Контакт можно добавить в настройках редактора.
                 </p>
               )}
-              {admin && (
+              {canEdit && (
                 <button
                   className="button secondary"
                   onClick={() => {
@@ -790,7 +861,7 @@ export default function Catalog() {
           </div>
         </Modal>
       )}
-      {editing !== undefined && (
+      {canEdit && editing !== undefined && (
         <WorkEditor
           work={editing}
           categories={categories}
@@ -798,8 +869,8 @@ export default function Catalog() {
           onSaved={saved}
         />
       )}
-      {admin && showTreeEditor && <TreeEditor works={works} ornaments={ornaments}
-        onClose={() => setShowTreeEditor(false)}
+      {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments} initialView={treeEditor}
+        onClose={() => setTreeEditor(null)}
         onSaved={(item) => setOrnaments((items) => [...items.filter((i) => i.id !== item.id), item].sort((a, b) => a.position - b.position))}
         onDeleted={(id) => setOrnaments((items) => items.filter((i) => i.id !== id))}
       />}
@@ -808,17 +879,20 @@ export default function Catalog() {
           onClose={() => setLoginOpen(false)}
           onLoggedIn={async () => {
             setLoginOpen(false);
+            setEditingEnabled(true);
+            setScope("published");
             await load();
           }}
         />
       )}
-      {showSettings && (
+      {admin && settingsSection && (
         <SettingsEditor
           settings={settings}
-          onClose={() => setShowSettings(false)}
+          section={settingsSection}
+          onClose={() => setSettingsSection(null)}
           onSaved={(s) => {
             setSettings(s);
-            setShowSettings(false);
+            setSettingsSection(null);
             setNotice("Настройки сохранены");
           }}
         />
@@ -1189,10 +1263,12 @@ function WorkEditor({
     </Modal>
   );
 }
-function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted }: {
+function TreeEditor({ works, ornaments, initialView, onClose, onSaved, onDeleted }: {
   works: Work[]; ornaments: TreeOrnament[]; onClose: () => void;
+  initialView: "add" | "manage";
   onSaved: (item: TreeOrnament) => void; onDeleted: (id: string) => void;
 }) {
+  const [showList, setShowList] = useState(initialView === "manage");
   const [editing, setEditing] = useState<TreeOrnament | null>(null);
   const [title, setTitle] = useState("");
   const [workId, setWorkId] = useState("");
@@ -1292,10 +1368,11 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted }: {
     }
   }
   const linkedWork = works.find((w) => w.id === workId);
-  return <Modal title="Работы на ёлке" onClose={() => { if (!busy) onClose(); }} wide>
+  return <Modal title={initialView === "add" ? "Добавить украшение" : "Украшения на ёлке"} onClose={() => { if (!busy) onClose(); }} wide>
     <div className="tree-manager">
       <p className="form-intro">У каждой игрушки своё изображение и ссылка на работу в каталоге. Например, отдельные Снегурочка и Дед Мороз могут открывать одну общую карточку.</p>
-      {ornaments.length > 0 && <div className="tree-manager-list" aria-label="Добавленные игрушки">
+      {!showList && ornaments.length > 0 && <button type="button" className="context-action tree-list-toggle" onClick={() => setShowList(true)}><Settings2 size={15} />Все украшения ({ornaments.length})</button>}
+      {showList && ornaments.length > 0 && <div className="tree-manager-list" aria-label="Добавленные игрушки">
         {ornaments.map((item) => {
           const work = works.find((w) => w.id === item.workId);
           return <div className="tree-manager-item" key={item.id}>
@@ -1343,16 +1420,18 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted }: {
 
 function SettingsEditor({
   settings,
+  section,
   onClose,
   onSaved,
 }: {
   settings: Settings;
+  section: "general" | "categories";
   onClose: () => void;
   onSaved: (s: Settings) => void;
 }) {
   const [name, setName] = useState(settings.name),
     [contact, setContact] = useState(settings.contact),
-    [categories, setCategories] = useState(settings.categories.join("\n")),
+    [categories, setCategories] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function submit(e: FormEvent) {
@@ -1364,10 +1443,10 @@ function SettingsEditor({
         await saveSettings({
           name,
           contact,
-          categories: categories
-            .split("\n")
-            .map((c) => c.trim())
-            .filter(Boolean),
+          categories: [
+            ...settings.categories,
+            ...categories.split("\n").map((c) => c.trim()).filter(Boolean),
+          ],
         }),
       );
     } catch (e) {
@@ -1378,48 +1457,58 @@ function SettingsEditor({
   }
   return (
     <Modal
-      title="Настройки мастерской"
+      title={section === "categories" ? "Категории каталога" : "Настройки сайта"}
       onClose={() => {
         if (!busy) onClose();
       }}
     >
       <form className="editor-form" onSubmit={submit}>
-        <label>
-          Название мастерской
-          <input
-            value={name}
-            required
-            maxLength={80}
-            onChange={(e) => setName(e.target.value)}
-            disabled={busy}
-          />
-        </label>
-        <label>
-          Ссылка для связи
-          <input
-            type="url"
-            placeholder="https://t.me/имя"
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            disabled={busy}
-          />
-        </label>
-        <p className="hint">
-          Telegram, VK или Instagram. Ссылка появится в карточках работ.
-        </p>
-        <label>
-          Категории, по одной на строку
-          <textarea
-            rows={5}
-            value={categories}
-            onChange={(e) => setCategories(e.target.value)}
-            disabled={busy}
-          />
-        </label>
-        <p className="hint">
-          Категорию также можно написать при добавлении работы. Удаление из
-          этого списка не меняет существующие карточки.
-        </p>
+        {section === "general" ? (
+          <>
+            <label>
+              Название мастерской
+              <input
+                value={name}
+                required
+                maxLength={80}
+                onChange={(e) => setName(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <label>
+              Ссылка для связи
+              <input
+                type="url"
+                placeholder="https://t.me/имя"
+                value={contact}
+                onChange={(e) => setContact(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <p className="hint">
+              Telegram, VK или Instagram. Ссылка появится в карточках работ.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="form-intro">Категории помогают посетителям находить нужные работы.</p>
+            <div className="category-list" aria-label="Существующие категории">
+              {settings.categories.map((name) => <span key={name}>{name}</span>)}
+            </div>
+            <label>
+              Добавить категории, по одной на строку
+              <textarea
+                rows={5}
+                value={categories}
+                onChange={(e) => setCategories(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <p className="hint">
+              Категорию также можно добавить в форме работы. Переименование и удаление существующих категорий пока недоступны.
+            </p>
+          </>
+        )}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -1468,14 +1557,14 @@ function LoginEditor({
   }
   return (
     <Modal
-      title="Вход редактора"
+      title="Вход"
       onClose={() => {
         if (!busy) onClose();
       }}
     >
       <form className="editor-form" onSubmit={submit}>
         <p className="form-intro">
-          Войдите с учётной записью администратора Supabase.
+          Введите email и пароль своего аккаунта.
         </p>
         <label>
           Email

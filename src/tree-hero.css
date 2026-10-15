@@ -43,6 +43,12 @@
 .tree-controls button { width: 37px; height: 37px; border: 1px solid #cdad84a0; background: #51374670; border-radius: 50%; color: #ffe0b3; display: grid; place-items: center; flex-shrink: 0; transition: background .2s; }
 .tree-controls button:hover { background: #9d6e5266; }
 .tree-controls > span { font-size: 10px; text-align: center; }
+.tree-editor-actions { position: relative; z-index: 40; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
+.tree-editor-actions .button { min-height: 44px; padding: 12px 16px; font-size: 11px; }
+.tree-editor-actions .button.primary { background: #f2b89d; color: #3d293c; border-color: #f2b89d; }
+.tree-editor-actions .button.secondary { border-color: #cdad84a0; color: #ffe0b3; background: #35213280; }
+.tree-editor-actions .button.secondary:hover { background: #513746; }
+.tree-list-toggle { margin-bottom: 18px; }
 .winter-dust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
 .winter-dust i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #ffdaa6; box-shadow: 0 0 12px 3px #ffc78577; animation: winter-twinkle 5s ease-in-out infinite alternate; }
 .winter-dust i:nth-child(4n) { width: 30px; height: 30px; filter: blur(9px); opacity: .2; }
