@@ -344,11 +344,6 @@ export default function Catalog() {
       ref={motionRoot}
       className={"studio-shell" + (motionPaused ? " motion-paused" : "")}
     >
-      <div className="private-bar">
-        <LockKeyhole size={12} />
-        <span>Приватный прототип · доступ только у вас</span>
-        <span className="bar-right">Ручная работа. Тёплые истории.</span>
-      </div>
       <header className="header">
         <a className="brand" href="#">
           <span className="brand-symbol">

@@ -26,8 +26,6 @@ h1, h2, h3, p { margin-top: 0; }
 h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .studio-shell { overflow-x: clip; }
 ::selection { background: #e1b9dd; color: var(--ink); }
-.private-bar { min-height: 30px; background: #2c1b2b; color: #d9bfce; padding: 7px var(--gutter); display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .4px; }
-.bar-right { margin-left: auto; opacity: .8; }
 .header { max-width: 1440px; margin: auto; padding: 24px var(--gutter); display: flex; gap: 36px; align-items: center; }
 .brand { display: flex; align-items: center; gap: 13px; font-family: var(--serif); font-size: 27px; letter-spacing: -.8px; }
 .brand-symbol { background: var(--lilac); width: 49px; height: 49px; border-radius: 16px; display: grid; place-items: center; transform: rotate(-9deg); transition: transform .6s; }
@@ -332,8 +330,6 @@ dd { margin: 0; }
   .admin-actions .button { padding: 12px 15px; font-size: 11px; }
 }
 @media (max-width: 720px) {
-  .private-bar { font-size: 9px; }
-  .bar-right { display: none; }
   .header { padding-top: 20px; padding-bottom: 20px; gap: 10px; }
   .brand { font-size: 22px; gap: 10px; }
   .brand-symbol { width: 41px; height: 41px; border-radius: 13px; }

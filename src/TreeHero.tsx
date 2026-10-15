@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Pause, Play, Sparkles, Flower2, Heart, Gift } from "lucide-react";
+import { ArrowUpRight, Sparkles, Flower2, Heart, Gift } from "lucide-react";
 import { visibleWorks, type Work } from "../lib/model";
 import "./tree-hero.css";
 import { treeItems, type TreeOrnament } from "./tree-items";
@@ -27,7 +27,6 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
   const items = selected.length ? selected.map((item) => ({ ...item, framed: false }))
     : published.filter((w) => w.featured && w.photos.length).slice(0, 8).map((work) => ({ id: work.id, title: work.title, imageUrl: work.photos[0].url, work, framed: true }));
   const [angle, setAngle] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; lastX: number; moved: boolean; workId?: string; pointerId: number } | null>(null);
@@ -39,7 +38,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (paused || reduced || dragging || stopMotion) return;
+    if (reduced || dragging || stopMotion) return;
     let id = 0, last = 0, elapsed = 0;
     const frame = (now: number) => {
       if (last && !document.hidden) {
@@ -54,7 +53,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
     };
     id = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(id);
-  }, [paused, reduced, dragging, stopMotion]);
+  }, [reduced, dragging, stopMotion]);
   const turn = (direction: number) => {
     setAngle((a) => (a + direction * TAU / Math.max(items.length, 6)) % TAU);
   };
@@ -95,8 +94,6 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
         <div className="winter-eyebrow"><Sparkles size={16} /> МАЛЕНЬКОЕ НОВОГОДНЕЕ ЧУДО <span /></div>
         <h1>Волшебные<br />украшения,<br /><em>в которых живёт</em><br /><span>тепло.</span></h1>
         <p>Авторские ёлочные игрушки ручной работы.<br />Немного волшебства. Много души.<br />И особая история для вашего дома.</p>
-        <a className="winter-cta" href="#catalog">Выбрать украшения <span><ArrowUpRight size={23} /></span></a>
-        <div className="winter-signature"><span /> Ручная работа <b>·</b> Уникальный дизайн <b>·</b> С любовью к деталям</div>
       </div>
       <div className="winter-tree-area">
         <div className={`winter-stage${dragging ? " is-dragging" : ""}`} tabIndex={0} role="group" aria-label="Вращающаяся ёлка с работами. Перетаскивайте или используйте стрелки на клавиатуре."
@@ -146,14 +143,6 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
               <span className="toy-title">{work.title} <ArrowUpRight size={13} /></span>
             </button> : <div key={`bauble-${i}`} className={`tree-bauble bauble-${i % 3}`} style={style} aria-hidden="true"><span className="toy-thread" /><span>✧</span></div>;
           })}
-        </div>
-        <div className="tree-controls">
-          <button onClick={() => turn(-1)} aria-label="Повернуть ёлку влево"><ArrowLeft size={18} /></button>
-          <span>{items.length ? "Поверните ёлку · выберите свою историю" : "Скоро здесь появятся новые истории"}</span>
-          <button onClick={() => turn(1)} aria-label="Повернуть ёлку вправо"><ArrowRight size={18} /></button>
-          <button onClick={() => {
-            setPaused((p) => !p);
-          }} disabled={reduced || stopMotion} aria-label={paused ? "Включить вращение" : "Остановить вращение"} aria-pressed={paused}>{paused || reduced || stopMotion ? <Play size={15} /> : <Pause size={15} />}</button>
         </div>
         {editorActions && <div className="tree-editor-actions" role="group" aria-label="Управление украшениями">{editorActions}</div>}
       </div>
