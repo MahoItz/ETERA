@@ -161,6 +161,47 @@ function resetTilt(e: ReactPointerEvent<HTMLElement>) {
   for (const name of ["--tilt-x", "--tilt-y", "--move-x", "--move-y"])
     e.currentTarget.style.removeProperty(name);
 }
+function SortDropdown({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const root = useRef<HTMLDetailsElement>(null);
+  const options = [["new", "Сначала избранное и новое"], ["name", "По названию"], ["price", "По цене"]];
+
+  useEffect(() => {
+    const closeOutside = (event: MouseEvent) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target) && root.current) root.current.open = false;
+    };
+    document.addEventListener("click", closeOutside);
+    return () => document.removeEventListener("click", closeOutside);
+  }, []);
+
+  return (
+    <details className="sort-dropdown" ref={root} onKeyDown={(event) => {
+      if (event.key === "Escape" && root.current) {
+        root.current.open = false;
+        root.current.querySelector("summary")?.focus();
+      }
+    }}>
+      <summary className="sort" aria-label="Сортировка">
+        <SlidersHorizontal size={16} />
+        <span>{options.find(([key]) => key === value)?.[1]}</span>
+        <ChevronDown size={16} className="sort-chevron" />
+      </summary>
+      <div className="sort-options" role="group" aria-label="Порядок сортировки">
+        {options.map(([key, label]) => (
+          <button key={key} type="button" aria-pressed={value === key} onClick={() => {
+            onChange(key);
+            if (root.current) {
+              root.current.open = false;
+              root.current.querySelector("summary")?.focus();
+            }
+          }}>
+            <span>{label}</span><Check size={16} aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export default function Catalog() {
   const motionRoot = useRef<HTMLDivElement>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
@@ -430,17 +471,6 @@ export default function Catalog() {
               Выберите <em>украшение</em>
             </h2>
           </div>
-          {canEdit && (
-            <div className="section-tools">
-              <button
-                className="button primary"
-                onClick={() => setEditing(null)}
-              >
-                <Plus size={18} />
-                Добавить работу
-              </button>
-            </div>
-          )}
         </div>
         <div className="toolbar" data-reveal>
           <div className="category-controls">
@@ -467,6 +497,30 @@ export default function Catalog() {
               </button>
             )}
           </div>
+          {canEdit && (
+            <div className="catalog-admin-toolbar">
+            <div className="scope-tabs">
+              {[
+                ["published", "В каталоге"],
+                ["draft", "Черновики"],
+                ["archived", "Архив и проданные"],
+                ["all", "Все"],
+              ].map(([k, v]) => (
+                <button
+                  key={k}
+                  className={scope === k ? "chosen" : ""}
+                  onClick={() => setScope(k)}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <button className="button primary" onClick={() => setEditing(null)}>
+              <Plus size={18} />
+              Добавить работу
+            </button>
+            </div>
+          )}
           <div className="search-sort">
             <label className="search">
               <Search size={17} />
@@ -486,38 +540,9 @@ export default function Catalog() {
                 </button>
               )}
             </label>
-            <label className="sort">
-              <SlidersHorizontal size={16} />
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                aria-label="Сортировка"
-              >
-                <option value="new">Сначала избранное и новое</option>
-                <option value="name">По названию</option>
-                <option value="price">По цене</option>
-              </select>
-            </label>
+            <SortDropdown value={sort} onChange={setSort} />
           </div>
         </div>
-        {canEdit && (
-          <div className="scope-tabs">
-            {[
-              ["published", "В каталоге"],
-              ["draft", "Черновики"],
-              ["archived", "Архив и проданные"],
-              ["all", "Все"],
-            ].map(([k, v]) => (
-              <button
-                key={k}
-                className={scope === k ? "chosen" : ""}
-                onClick={() => setScope(k)}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
         {error ? (
           <div className="empty">
             <h3>Не удалось загрузить работы</h3>
