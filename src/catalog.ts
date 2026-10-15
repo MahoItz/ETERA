@@ -203,6 +203,27 @@ export async function deleteTreeOrnament(id: string) {
   fail(result.error);
 }
 
+export async function saveTreeOrnamentOrder(previous: TreeOrnament[], ordered: TreeOrnament[]) {
+  const previousIds = new Set(previous.map((item) => item.id));
+  if (previous.length !== ordered.length || new Set(ordered.map((item) => item.id)).size !== previous.length
+    || previousIds.size !== previous.length || ordered.some((item) => !previousIds.has(item.id))) {
+    throw new Error("Не удалось изменить порядок. Обновите страницу и попробуйте снова.");
+  }
+  const result = await supabase.rpc("reorder_tree_ornaments", {
+    ordered_ids: ordered.map((item) => item.id),
+    expected_ids: previous.map((item) => item.id),
+    expected_positions: previous.map((item) => item.position),
+  });
+  if (result.error?.code === "PGRST202") {
+    throw new Error("Для сохранения порядка нужно применить обновление базы данных. Пока оставлен прежний порядок.");
+  }
+  if (result.error?.code === "40001") {
+    throw new Error("Список украшений уже изменён на другом устройстве. Закройте окно и обновите страницу перед повторной попыткой.");
+  }
+  fail(result.error);
+  return ordered.map((item, position) => ({ ...item, position }));
+}
+
 // Never remove an image still used by another ornament or a catalogue photo.
 export async function cleanUnusedTreeImage(url: string) {
   const path = storagePathFromUrl(url);

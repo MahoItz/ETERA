@@ -1,5 +1,6 @@
 import { TreeHero } from "./TreeHero";
-import type { TreeOrnament } from "./tree-items";
+import { treeItems, type TreeOrnament } from "./tree-items";
+import { useOrnamentSort } from "./useOrnamentSort";
 import {
   useEffect,
   useRef,
@@ -15,6 +16,7 @@ import {
   Check,
   ChevronDown,
   Flower2,
+  GripVertical,
   ImagePlus,
   Eye,
   LogOut,
@@ -28,6 +30,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Star,
+  Trash2,
+  Upload,
   UserRound,
   X,
   Loader2,
@@ -49,6 +53,7 @@ import {
   signOut,
   uploadPhoto,
   saveTreeOrnament,
+  saveTreeOrnamentOrder,
   deleteTreeOrnament,
   cleanUnusedTreeImage,
 } from "./catalog";
@@ -161,7 +166,7 @@ export default function Catalog() {
   const accountMenu = useRef<HTMLDetailsElement>(null);
   const [motionPaused, setMotionPaused] = useState(false);
   const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
-  const [treeEditor, setTreeEditor] = useState<"add" | "manage" | null>(null);
+  const [treeEditor, setTreeEditor] = useState(false);
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
@@ -314,7 +319,7 @@ export default function Catalog() {
     setScope("published");
     setCategory("");
     setEditing(undefined);
-    setTreeEditor(null);
+    setTreeEditor(false);
     setSettingsSection(null);
     setSelected(null);
     if (accountMenu.current) accountMenu.current.open = false;
@@ -329,7 +334,7 @@ export default function Catalog() {
       setWorks((items) => visibleWorks(items));
       setSelected(null);
       setEditing(undefined);
-      setTreeEditor(null);
+      setTreeEditor(false);
       setSettingsSection(null);
       setScope("published");
       setCategory("");
@@ -410,15 +415,12 @@ export default function Catalog() {
         ornaments={ornaments}
         ready={!loading && !error}
         onOpen={open}
-        stopMotion={motionPaused || selected !== null}
-        editorActions={canEdit ? <>
-          <button className="button primary" onClick={() => setTreeEditor("add")}>
-            <Plus size={16} />Добавить украшение
+        stopMotion={motionPaused || selected !== null || treeEditor}
+        editorActions={canEdit ? (
+          <button className="button secondary" onClick={() => setTreeEditor(true)}>
+            <Settings2 size={16} />Управление украшениями
           </button>
-          <button className="button secondary" onClick={() => setTreeEditor("manage")}>
-            <Settings2 size={16} />Управлять украшениями
-          </button>
-        </> : undefined}
+        ) : undefined}
       />
 
       <main id="catalog" className="catalog-section">
@@ -857,10 +859,14 @@ export default function Catalog() {
           onSaved={saved}
         />
       )}
-      {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments} initialView={treeEditor}
-        onClose={() => setTreeEditor(null)}
+      {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments}
+        onClose={() => setTreeEditor(false)}
         onSaved={(item) => setOrnaments((items) => [...items.filter((i) => i.id !== item.id), item].sort((a, b) => a.position - b.position))}
         onDeleted={(id) => setOrnaments((items) => items.filter((i) => i.id !== id))}
+        onReordered={(ordered) => {
+          const positions = new Map(ordered.map((item) => [item.id, item.position]));
+          setOrnaments((items) => items.map((item) => positions.has(item.id) ? { ...item, position: positions.get(item.id)! } : item));
+        }}
       />}
       {loginOpen && (
         <LoginEditor
@@ -1251,12 +1257,11 @@ function WorkEditor({
     </Modal>
   );
 }
-function TreeEditor({ works, ornaments, initialView, onClose, onSaved, onDeleted }: {
+function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered }: {
   works: Work[]; ornaments: TreeOrnament[]; onClose: () => void;
-  initialView: "add" | "manage";
   onSaved: (item: TreeOrnament) => void; onDeleted: (id: string) => void;
+  onReordered: (items: TreeOrnament[]) => void;
 }) {
-  const [showList, setShowList] = useState(initialView === "manage");
   const [editing, setEditing] = useState<TreeOrnament | null>(null);
   const [title, setTitle] = useState("");
   const [workId, setWorkId] = useState("");
@@ -1265,37 +1270,91 @@ function TreeEditor({ works, ornaments, initialView, onClose, onSaved, onDeleted
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"close" | { item: TreeOrnament | null } | null>(null);
   const newId = useRef(crypto.randomUUID());
   const pending = useRef<{ blob: Blob; uploaded?: string } | null>(null);
   const localUrls = useRef(new Set<string>());
   const uploadedUrls = useRef(new Set<string>());
   const fileInput = useRef<HTMLInputElement>(null);
+  const formHeading = useRef<HTMLHeadingElement>(null);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  const cancelRemove = useRef<HTMLButtonElement>(null);
+  const errorMessage = useRef<HTMLParagraphElement>(null);
+  const sorting = useOrnamentSort(ornaments, busy || pendingAction !== null || confirmRemove, async (previous, ordered) => {
+    const saved = await saveTreeOrnamentOrder(previous, ordered);
+    onReordered(saved);
+    setEditing((item) => item ? { ...item, position: saved.find((savedItem) => savedItem.id === item.id)!.position } : null);
+  });
+  const sortedOrnaments = sorting.sorted;
+  const displayedIds = new Set(treeItems(works, ornaments).map((item) => item.id));
+  const dirty = title !== (editing?.title ?? "") || workId !== (editing?.workId ?? "") || image !== (editing?.imageUrl ?? "");
   useEffect(() => () => {
     for (const url of localUrls.current) URL.revokeObjectURL(url);
     for (const url of uploadedUrls.current) void cleanUnusedTreeImage(url).catch(() => {});
   }, []);
+  useEffect(() => {
+    if (pendingAction) keepEditing.current?.focus();
+  }, [pendingAction]);
+  useEffect(() => {
+    if (error) errorMessage.current?.focus();
+  }, [error]);
+  useEffect(() => {
+    if (confirmRemove) cancelRemove.current?.focus();
+  }, [confirmRemove]);
+  function releasePreview(url: string) {
+    if (localUrls.current.delete(url)) URL.revokeObjectURL(url);
+  }
   function choose(item: TreeOrnament | null) {
+    releasePreview(image);
     setEditing(item);
     setTitle(item?.title ?? "");
     setWorkId(item?.workId ?? "");
     setImage(item?.imageUrl ?? "");
     newId.current = crypto.randomUUID();
     pending.current = null;
+    setFileName("");
+    setConfirmRemove(false);
+    setPendingAction(null);
     if (fileInput.current) fileInput.current.value = "";
     setError("");
+    setMessage("");
+    requestAnimationFrame(() => formHeading.current?.focus());
+  }
+  function requestSelect(item: TreeOrnament) {
+    if (busy || pendingAction || sorting.saving || sorting.active) return;
+    const nextItem = item.id === editing?.id ? null : item;
+    if (dirty) setPendingAction({ item: nextItem });
+    else choose(nextItem);
+  }
+  function requestClose() {
+    if (sorting.cancel()) return;
+    if (busy || sorting.saving) return;
+    if (dirty) setPendingAction("close");
+    else onClose();
+  }
+  function discardChanges() {
+    if (pendingAction === "close") onClose();
+    else if (pendingAction) choose(pendingAction.item);
   }
   async function prepare(file?: File) {
-    if (!file) return;
+    if (!file || busy || pendingAction || sorting.saving || sorting.active) return;
     setBusy(true);
     setError("");
+    setMessage("");
+    setConfirmRemove(false);
     setProgress("Обрабатываем изображение…");
     try {
       if (file.type !== "image/webp") throw new Error("Выберите WebP с прозрачным фоном.");
       const blob = await compressPhoto(file);
       const url = URL.createObjectURL(blob);
       localUrls.current.add(url);
+      releasePreview(image);
       pending.current = { blob };
       setImage(url);
+      setFileName(file.name);
       if (!title.trim()) setTitle(file.name.replace(/\.webp$/i, "").slice(0, 120));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось обработать изображение");
@@ -1306,14 +1365,15 @@ function TreeEditor({ works, ornaments, initialView, onClose, onSaved, onDeleted
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!image || !workId || !title.trim()) {
-      setError("Добавьте изображение, название игрушки и выберите работу для ссылки.");
+    if (busy || pendingAction || confirmRemove || sorting.saving || sorting.active) return;
+    if (!image || !title.trim() || !works.some((work) => work.id === workId)) {
+      setError("Добавьте изображение, название украшения и выберите работу из каталога.");
       return;
     }
     setBusy(true);
     setError("");
     setMessage("");
-    setProgress("Сохраняем игрушку…");
+    setProgress("Сохраняем украшение…");
     try {
       let imageUrl = image;
       if (pending.current) {
@@ -1332,78 +1392,158 @@ function TreeEditor({ works, ornaments, initialView, onClose, onSaved, onDeleted
       onSaved(saved);
       if (editing && editing.imageUrl !== imageUrl) void cleanUnusedTreeImage(editing.imageUrl).catch(() => {});
       choose(null);
-      setMessage("Игрушка сохранена. Можно добавить следующую.");
+      setMessage(editing ? "Изменения сохранены." : "Украшение добавлено. Можно добавить следующее.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось сохранить игрушку");
+      setError(e instanceof Error ? e.message : "Не удалось сохранить украшение");
     } finally {
       setBusy(false);
       setProgress("");
     }
   }
   async function remove(item: TreeOrnament) {
+    if (busy || sorting.saving || sorting.active) return;
     setBusy(true);
     setError("");
+    setMessage("");
+    setProgress("Убираем украшение…");
     try {
       await deleteTreeOrnament(item.id);
       onDeleted(item.id);
       if (editing?.id === item.id) choose(null);
       void cleanUnusedTreeImage(item.imageUrl).catch(() => {});
-      setMessage("Игрушка убрана с ёлки. Работа осталась в каталоге.");
+      setConfirmRemove(false);
+      setMessage("Украшение убрано с ёлки. Работа осталась в каталоге.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось убрать игрушку");
+      setError(e instanceof Error ? e.message : "Не удалось убрать украшение");
     } finally {
       setBusy(false);
+      setProgress("");
     }
   }
   const linkedWork = works.find((w) => w.id === workId);
-  return <Modal title={initialView === "add" ? "Добавить украшение" : "Украшения на ёлке"} onClose={() => { if (!busy) onClose(); }} wide>
-    <div className="tree-manager">
-      <p className="form-intro">У каждой игрушки своё изображение и ссылка на работу в каталоге. Например, отдельные Снегурочка и Дед Мороз могут открывать одну общую карточку.</p>
-      {!showList && ornaments.length > 0 && <button type="button" className="context-action tree-list-toggle" onClick={() => setShowList(true)}><Settings2 size={15} />Все украшения ({ornaments.length})</button>}
-      {showList && ornaments.length > 0 && <div className="tree-manager-list" aria-label="Добавленные игрушки">
-        {ornaments.map((item) => {
-          const work = works.find((w) => w.id === item.workId);
-          return <div className="tree-manager-item" key={item.id}>
-            <img src={imageUrl(item.imageUrl)} alt={item.title} />
-            <div><strong>{item.title}</strong><span>Открывает: {work?.title ?? "Работа недоступна"}</span>
-              {(!work || work.status !== "published" || work.availability === "sold") && <small>Скрыта до публикации доступной работы</small>}
+  const fieldsDisabled = busy || pendingAction !== null || sorting.saving || sorting.draggingId !== null;
+  return (
+    <Modal title="Управление украшениями" onClose={requestClose} wide>
+      <div className="tree-manager">
+        <p className="form-intro">Выберите украшение для редактирования или добавьте новое. Каждое украшение открывает связанную работу в каталоге.</p>
+        <div className="tree-manager-layout">
+          <section className="tree-library" aria-labelledby="tree-library-heading">
+            <div className="tree-library-head">
+              <h3 id="tree-library-heading">Украшения</h3>
             </div>
-            <button type="button" className="button secondary" disabled={busy} onClick={() => choose(item)}>Изменить</button>
-            <button type="button" className="icon-button" disabled={busy} onClick={() => void remove(item)} aria-label={`Убрать с ёлки: ${item.title}`}><X size={18} /></button>
-          </div>;
-        })}
-      </div>}
-      <p className="hint">На главной показываются первые 8 игрушек, связанных с опубликованными непроданными работами.</p>
-      <form className="editor-form tree-ornament-form" onSubmit={submit}>
-        <h3>{editing ? "Изменить игрушку" : "Добавить игрушку на ёлку"}</h3>
-        <label>Название игрушки *<input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} disabled={busy} placeholder="Например, Снегурочка" /></label>
-        <label>Изображение игрушки *<input ref={fileInput} type="file" accept="image/webp" disabled={busy} onChange={(e) => {
-          const file = e.currentTarget.files?.[0];
-          e.currentTarget.value = "";
-          void prepare(file);
-        }} /></label>
-        <p className="hint">WebP с прозрачным фоном. Файл отправляется в Storage только после нажатия «Добавить на ёлку» или «Сохранить изменения».</p>
-        {image && <div className="tree-image-preview"><img src={imageUrl(image)} alt="Предпросмотр игрушки" /></div>}
-        <label>Какую работу открывать при нажатии *<select required value={workId} onChange={(e) => setWorkId(e.target.value)} disabled={busy}>
-          <option value="" disabled>Выберите работу из каталога</option>
-          {works.map((work) => <option key={work.id} value={work.id}>{work.title}{work.status !== "published" ? " (не опубликована)" : work.availability === "sold" ? " (продана)" : ""}</option>)}
-        </select></label>
-        {linkedWork && <div className="tree-link-preview">
-          {linkedWork.photos[0] && <img src={imageUrl(linkedWork.photos[0].url)} alt="" />}
-          <span>При нажатии откроется: <strong>{linkedWork.title}</strong></span>
-        </div>}
-        {linkedWork && (linkedWork.status !== "published" || linkedWork.availability === "sold") && <p className="hint">Игрушка появится на главной, когда связанная работа будет опубликована и не будет отмечена как проданная.</p>}
-        {!works.length && <p className="hint">Сначала добавьте работу в каталог, чтобы связать с ней игрушку.</p>}
-        {error && <p className="form-error" role="alert">{error}</p>}
-        {message && <p role="status">{message}</p>}
-        <div className="form-footer">
-          {editing && <button type="button" className="button secondary" disabled={busy} onClick={() => choose(null)}>Новая игрушка</button>}
-          <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Закрыть</button>
-          <button className="button primary" disabled={busy || !works.length}>{busy ? progress || "Сохраняем…" : editing ? "Сохранить изменения" : "Добавить на ёлку"}</button>
+            <p className="hint" id="tree-sort-help">На ёлке {displayedIds.size} из 8. Перетаскивайте украшения за ручку, чтобы менять их порядок.</p>
+            <span className="visually-hidden" id="tree-sort-keyboard">Для перемещения с клавиатуры нажмите Пробел на ручке, используйте стрелки, затем снова Пробел для сохранения. Escape — отмена.</span>
+            {sorting.error && <p className="form-error" role="alert">{sorting.error}</p>}
+            <p className="tree-sort-status" role="status" aria-live="polite">{sorting.saving && <Loader2 size={14} className="spin" />}{sorting.announcement}</p>
+            {sortedOrnaments.length ? (
+              <div className="tree-manager-list" ref={sorting.listRef} aria-label="Добавленные украшения" aria-busy={sorting.saving}
+                onPointerMove={sorting.pointerMove} onPointerUp={sorting.pointerUp}
+                onPointerCancel={() => sorting.cancel()} onLostPointerCapture={() => sorting.cancel()}>
+                {sortedOrnaments.map((item) => {
+                  const work = works.find((w) => w.id === item.workId);
+                  const visible = displayedIds.has(item.id);
+                  const eligible = work?.status === "published" && work.availability !== "sold";
+                  return (
+                    <div key={item.id} data-ornament-id={item.id} className={"tree-sortable-item" + (sorting.draggingId === item.id ? " is-dragging" : "")}>
+                    <button type="button" className="tree-drag-handle"
+                      aria-label={`Изменить порядок: ${item.title}`} aria-describedby="tree-sort-help tree-sort-keyboard"
+                      title="Перетащить украшение" disabled={busy || pendingAction !== null || confirmRemove || sorting.saving || sortedOrnaments.length < 2 || (sorting.draggingId !== null && sorting.draggingId !== item.id)}
+                      onPointerDown={(e) => sorting.pointerDown(e, item.id)}
+                      onKeyDown={(e) => sorting.keyDown(e, item.id)} onClick={(e) => e.preventDefault()}>
+                      <GripVertical size={18} />
+                    </button>
+                    <button type="button" className="tree-manager-item"
+                      aria-pressed={editing?.id === item.id} disabled={fieldsDisabled}
+                      title={editing?.id === item.id ? "Снять выбор и перейти к добавлению" : "Редактировать украшение"}
+                      onClick={() => requestSelect(item)}>
+                      <span className="tree-item-image"><img src={imageUrl(item.imageUrl)} alt="" loading="lazy" draggable={false} /></span>
+                      <strong>{item.title}</strong>
+                      <span className="tree-item-work" title={work?.title}>{work?.title ?? "Работа недоступна"}</span>
+                      <span className={"tree-item-status" + (visible ? " is-visible" : "")}>{visible ? "На ёлке" : eligible ? "В очереди" : "Скрыто"}</span>
+                    </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="tree-library-empty"><Sparkles size={28} /><strong>Пока нет украшений</strong><p>Добавьте первое с помощью формы.</p></div>
+            )}
+          </section>
+          <form className="editor-form tree-ornament-form" onSubmit={submit} aria-busy={busy}>
+            <h3 ref={formHeading} tabIndex={-1}>{editing ? "Редактировать украшение" : "Новое украшение"}</h3>
+            {pendingAction && (
+              <div className="tree-confirm" role="alert">
+                <strong>Есть несохранённые изменения</strong>
+                <p>{pendingAction === "close" ? "Закрыть окно без сохранения?" : pendingAction.item ? "Перейти к другому украшению без сохранения?" : "Начать новое украшение без сохранения текущих изменений?"}</p>
+                <div>
+                  <button ref={keepEditing} type="button" className="button secondary" onClick={() => setPendingAction(null)}>Продолжить редактирование</button>
+                  <button type="button" className="button secondary" onClick={discardChanges}>Не сохранять</button>
+                </div>
+              </div>
+            )}
+            {error && <p className="form-error" ref={errorMessage} tabIndex={-1} role="alert">{error}</p>}
+            {message && <p className="tree-success" role="status"><Check size={16} />{message}</p>}
+            <div className="tree-upload-field">
+              <span className="tree-field-label" id="tree-image-label">Изображение украшения *</span>
+              <input ref={fileInput} type="file" accept="image/webp" className="visually-hidden" tabIndex={-1}
+                aria-labelledby="tree-image-label" disabled={fieldsDisabled} onChange={(e) => {
+                  const file = e.currentTarget.files?.[0];
+                  e.currentTarget.value = "";
+                  void prepare(file);
+                }} />
+              <button type="button" className={"tree-upload" + (dragOver ? " is-drag-over" : "")}
+                disabled={fieldsDisabled} onClick={() => fileInput.current?.click()}
+                aria-label={image ? "Заменить изображение украшения" : "Выбрать изображение украшения"}
+                onDragOver={(e) => { e.preventDefault(); if (!fieldsDisabled) { e.dataTransfer.dropEffect = "copy"; setDragOver(true); } }}
+                onDragLeave={(e) => { if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (fieldsDisabled) return;
+                  if (e.dataTransfer.files.length !== 1) { setError("Выберите одно изображение украшения."); return; }
+                  void prepare(e.dataTransfer.files[0]);
+                }}>
+                <span className="tree-upload-preview">{image ? <img src={imageUrl(image)} alt="Предпросмотр украшения" /> : <ImagePlus size={30} />}</span>
+                <span className="tree-upload-copy">
+                  <span className="tree-upload-action"><Upload size={16} />{image ? "Заменить файл" : "Выбрать файл"}</span>
+                  <span className="tree-upload-filename">{fileName || (image ? "Текущее изображение" : "или перетащите его сюда")}</span>
+                  <span>WebP с прозрачным фоном · до 20 МБ</span>
+                </span>
+              </button>
+              <p className="hint">Изображение загрузится после сохранения украшения.</p>
+            </div>
+            <label>Название украшения *<input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} disabled={fieldsDisabled} placeholder="Например, Снегурочка" /></label>
+            <label>Работа в каталоге *<select required value={workId} onChange={(e) => setWorkId(e.target.value)} disabled={fieldsDisabled || !works.length}>
+              <option value="" disabled>Выберите работу</option>
+              {works.map((work) => <option key={work.id} value={work.id}>{work.title}{work.status !== "published" ? " (не опубликована)" : work.availability === "sold" ? " (продана)" : ""}</option>)}
+            </select></label>
+            {linkedWork && <div className="tree-link-preview">
+              {linkedWork.photos[0] && <img src={imageUrl(linkedWork.photos[0].url)} alt="" />}
+              <span>При нажатии откроется:<strong>{linkedWork.title}</strong></span>
+            </div>}
+            {linkedWork && (linkedWork.status !== "published" || linkedWork.availability === "sold") && <p className="hint tree-visibility-note">Украшение скрыто, пока связанная работа не опубликована или отмечена как проданная.</p>}
+            {!works.length && <p className="hint tree-visibility-note">Сначала добавьте работу в каталог, затем свяжите с ней украшение.</p>}
+            {confirmRemove && editing && <div className="tree-confirm" role="alert">
+              <strong>Убрать «{editing.title}» с ёлки?</strong>
+              <p>Работа останется в каталоге.</p>
+              <div>
+                <button ref={cancelRemove} type="button" className="button secondary" disabled={busy} onClick={() => setConfirmRemove(false)}>Отмена</button>
+                <button type="button" className="button danger" disabled={busy} onClick={() => void remove(editing)}>Убрать с ёлки</button>
+              </div>
+            </div>}
+            {busy && <p className="tree-progress" role="status"><Loader2 size={16} className="spin" />{progress || "Сохраняем…"}</p>}
+            <div className="form-footer">
+              <button type="button" className="button secondary" disabled={busy || sorting.saving} onClick={requestClose}>Закрыть</button>
+              <button className="button primary" disabled={fieldsDisabled || confirmRemove || !works.length || !image || !title.trim() || !linkedWork || (editing !== null && !dirty)}>
+                <Check size={16} />{editing ? "Сохранить изменения" : "Добавить на ёлку"}
+              </button>
+            </div>
+            {editing && <button type="button" className="tree-remove-button" disabled={fieldsDisabled || confirmRemove} onClick={() => setConfirmRemove(true)}><Trash2 size={15} />Убрать с ёлки</button>}
+          </form>
         </div>
-      </form>
-    </div>
-  </Modal>;
+      </div>
+    </Modal>
+  );
 }
 
 function SettingsEditor({
