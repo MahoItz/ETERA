@@ -6,6 +6,16 @@ import { treeItems, type TreeOrnament } from "./tree-items";
 
 const TAU = Math.PI * 2;
 const assetUrl = (url: string) => new URL(url, `${window.location.origin}${import.meta.env.BASE_URL}`).href;
+const treeLevels = [
+  { y: 23, radius: 8, scale: .72 },
+  { y: 31, radius: 11, scale: .8 },
+  { y: 39, radius: 14, scale: .88 },
+  { y: 48, radius: 17, scale: .96 },
+  { y: 58, radius: 20, scale: 1.04 },
+  { y: 67, radius: 22, scale: 1.09 },
+  { y: 74, radius: 24, scale: 1.12 },
+  { y: 81, radius: 26, scale: 1.14 },
+] as const;
 
 export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
   works: Work[]; ornaments: TreeOrnament[]; ready: boolean; onOpen: (work: Work) => void; stopMotion: boolean;
@@ -104,28 +114,31 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion }: {
               <linearGradient id="ribbon-rose"><stop stopColor="#654053" /><stop offset=".5" stopColor="#e4b4c4" /><stop offset="1" stopColor="#89566a" /></linearGradient>
               <filter id="gold-glow"><feGaussianBlur stdDeviation="3" /></filter>
             </defs>
-            <path d="M350 48 C330 190 295 320 260 558 L440 558 C405 320 370 190 350 48" fill="url(#ribbon-gold)" opacity=".035" />
-            {[0, 1, 2, 3, 4].map((i) => {
-              const y = 135 + i * 91, rx = 63 + i * 49;
-              return <g key={i} transform={`translate(350 ${y}) rotate(${Math.sin(angle + i * .7) * 9})`}>
-                <ellipse rx={rx} ry={17 + i * 7} fill="none" stroke="url(#ribbon-rose)" strokeWidth="13" opacity=".35" transform="rotate(-13)" />
-                <ellipse rx={rx} ry={20 + i * 7} fill="none" stroke="url(#ribbon-gold)" strokeWidth="12" />
-                <ellipse rx={rx} ry={20 + i * 7} fill="none" stroke="#ffe1a8" strokeWidth="1" transform="translate(0 -6)" opacity=".8" />
+            <path d="M350 48 C330 190 295 320 260 558 L440 558 C405 320 370 190 350 48" fill="url(#ribbon-gold)" opacity=".06" />
+            {[0, 1, 2, 3, 4, 5].map((i) => {
+              const y = 119 + i * 79, rx = 52 + i * 43, ry = 15 + i * 5;
+              return <g key={i} transform={`translate(350 ${y}) rotate(${Math.sin(angle + i * .7) * 7 - 11})`}>
+                <ellipse rx={rx} ry={ry} fill="none" stroke="url(#ribbon-rose)" strokeWidth="15" opacity=".26" />
+                <ellipse rx={rx} ry={ry} fill="none" stroke="url(#ribbon-gold)" strokeWidth="10" opacity=".72" />
+                <ellipse rx={rx} ry={ry} fill="none" stroke="#fff0c8" strokeWidth="1.5" transform="translate(0 -4)" opacity=".7" />
               </g>;
             })}
-            <path d="M350 58 C330 125 440 160 420 218 S160 295 215 355 S625 425 550 500 S190 570 90 550" fill="none" stroke="url(#ribbon-gold)" strokeWidth="17" opacity=".85" />
-            <path d="M350 58 C330 125 440 160 420 218 S160 295 215 355 S625 425 550 500 S190 570 90 550" fill="none" stroke="#ffe6b4" strokeWidth="1" />
+            <path d="M350 58 C330 125 440 160 420 218 S160 295 215 355 S625 425 544 486 S304 525 240 506" fill="none" stroke="url(#ribbon-gold)" strokeWidth="12" opacity=".38" />
+            <path d="M350 58 C330 125 440 160 420 218 S160 295 215 355 S625 425 544 486 S304 525 240 506" fill="none" stroke="#fff0ca" strokeWidth="1" opacity=".45" />
             {Array.from({ length: 30 }, (_, i) => {
               const y = 115 + i * 15, phase = i * 2.4 + angle, width = 35 + i * 8;
               return <g key={i}><circle cx={350 + Math.sin(phase) * width} cy={y} r="5" fill="#ffc981" opacity=".5" filter="url(#gold-glow)" /><circle cx={350 + Math.sin(phase) * width} cy={y} r="1.7" fill="#fff0c5" /></g>;
             })}
           </svg>
+          <div className="tree-lights" aria-hidden="true">{Array.from({ length: 25 }, (_, i) => {
+            const level = treeLevels[(i * 3) % treeLevels.length];
+            return <i key={i} style={{ left: `${50 + Math.sin(i * 2.39) * level.radius}%`, top: `${level.y + ((i % 3) - 1) * 2}%`, animationDelay: `${i * -.41}s` }} />;
+          })}</div>
           <div className="tree-star" aria-hidden="true">✧</div>
           {Array.from({ length: count }, (_, i) => {
-            const work = items[i], phase = angle + i * TAU / count;
-            const depth = Math.cos(phase), radius = 22 + (i % 3) * 5;
-            const x = 50 + Math.sin(phase) * radius, y = 35 + (i % 3) * 13 + depth * 5;
-            const style = { left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -25%) scale(${.7 + (depth + 1) * .2})`, zIndex: Math.round(20 + depth * 10), opacity: .55 + (depth + 1) * .225 };
+            const work = items[i], level = treeLevels[i % treeLevels.length], phase = angle + i * TAU / count + i * .21;
+            const depth = Math.cos(phase), x = 50 + Math.sin(phase) * level.radius, y = level.y + depth * 4;
+            const style = { left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -25%) scale(${level.scale * (.83 + (depth + 1) * .12)})`, zIndex: Math.round(20 + depth * 10), opacity: .58 + (depth + 1) * .21 };
             return work ? <button key={work.id} data-work={work.id} className={`tree-toy${work.framed ? " tree-toy-framed" : ""}`} style={style} disabled={!ready} aria-label={`Рассмотреть: ${work.title}`} onClick={(e) => { if (e.detail === 0 && ready) onOpen(work.work); }}>
               <span className="toy-thread" aria-hidden="true" />
               <img draggable={false} src={assetUrl(work.imageUrl)} alt={work.title} />

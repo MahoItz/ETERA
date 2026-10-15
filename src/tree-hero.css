@@ -18,14 +18,18 @@
 .winter-stage { position: relative; width: 115%; margin-left: -9%; aspect-ratio: 1.1; max-height: 610px; min-height: 450px; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .winter-stage.is-dragging { cursor: grabbing; }
 .winter-stage:focus-visible { outline: 1px solid #eacb9c; outline-offset: -15px; border-radius: 50%; }
-.tree-halo { position: absolute; inset: 4% 0 0; background: radial-gradient(ellipse, #da9c4a25, transparent 65%); filter: blur(20px); pointer-events: none; }
+.tree-halo { position: absolute; inset: 4% 0 0; background: radial-gradient(ellipse, #da9c4a33, transparent 64%); filter: blur(20px); pointer-events: none; }
 .ribbon-tree { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.tree-star { position: absolute; top: -1%; left: 50%; transform: translateX(-50%); font-family: Georgia, serif; font-size: 105px; line-height: 1; color: #ffdc9d; text-shadow: 0 0 12px #ffd28f, 0 0 60px #e7a34e88; pointer-events: none; }
+.tree-lights { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.tree-lights i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #fff5cd; box-shadow: 0 0 6px 2px #ffe0a6, 0 0 20px 5px #f0a95b88; animation: tree-light 2.8s ease-in-out infinite alternate; }
+.tree-lights i:nth-child(3n) { width: 3px; height: 3px; animation-duration: 3.7s; }
+@keyframes tree-light { from { opacity: .35; transform: scale(.72); } to { opacity: 1; transform: scale(1.2); } }
+.tree-star { position: absolute; z-index: 38; top: -1%; left: 50%; transform: translateX(-50%); font-family: Georgia, serif; font-size: 105px; line-height: 1; color: #ffdc9d; text-shadow: 0 0 12px #ffd28f, 0 0 28px #ffd28faa, 0 0 60px #e7a34e88; pointer-events: none; }
 .tree-toy, .tree-bauble { position: absolute; width: 24%; padding: 0; border: 0; background: transparent; color: #fff1dc; transform-origin: center top; -webkit-tap-highlight-color: transparent; }
 .tree-toy { cursor: grab; }
 .is-dragging .tree-toy { cursor: grabbing; }
-.tree-toy img { width: 100%; height: 195px; object-fit: contain; filter: drop-shadow(0 12px 10px #180d2370); pointer-events: none; transition: filter .2s; }
-.tree-toy:hover img, .tree-toy:focus-visible img { filter: drop-shadow(0 0 15px #ffcf8e80); }
+.tree-toy img { width: 100%; height: 195px; object-fit: contain; filter: drop-shadow(0 12px 10px #180d2370); pointer-events: none; transition: filter .2s, transform .2s; }
+.tree-toy:hover img, .tree-toy:focus-visible img { filter: drop-shadow(0 0 15px #ffcf8e80); transform: translateY(-3px) scale(1.035); }
 .toy-thread { position: absolute; left: 50%; width: 1px; height: 62px; top: -62px; background: linear-gradient(transparent, #d9b272); pointer-events: none; }
 .toy-thread::after { content: ''; position: absolute; bottom: -3px; left: -3px; width: 7px; height: 7px; border: 1px solid #e6c38e; border-radius: 50%; }
 .toy-title { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 210px; display: flex; align-items: center; gap: 6px; background: #352332e8; border: 1px solid #ba95795c; border-radius: 20px; padding: 8px 12px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -59,8 +63,8 @@
 @media (min-width: 1600px) { .winter-hero { min-height: 710px; } .winter-stage { max-height: 650px; } }
 @media (max-width: 1000px) { .winter-hero { padding: 30px 32px; min-height: 580px; } .winter-copy h1 { font-size: 53px; } .winter-signature { font-size: 8px; gap: 8px; } .winter-stage { width: 120%; min-height: 410px; margin-left: -12%; } .tree-toy img { height: 155px; } .tree-toy-framed img { height: 130px; } .winter-eyebrow { letter-spacing: 2px; font-size: 8px; } .tree-controls > span { max-width: 125px; line-height: 1.5; } }
 @media (max-width: 700px) { .winter-hero { grid-template-columns: 1fr; padding: 35px 24px 24px; border-radius: 0 0 32px 32px; } .winter-copy { padding: 0; } .winter-copy h1 { font-size: clamp(44px, 9vw, 64px); } .winter-copy p { font-size: 16px; margin-bottom: 20px; } .winter-eyebrow { margin-bottom: 22px; } .winter-signature { margin-top: 22px; font-size: 8px; flex-wrap: wrap; } .winter-tree-area { margin-top: 24px; } .winter-stage { width: 110%; margin-left: -5%; min-height: 0; max-height: none; aspect-ratio: 1.08; } .tree-star { font-size: 80px; } .tree-toy img { height: clamp(100px, 33vw, 195px); } .tree-toy-framed img { height: clamp(95px, 29vw, 170px); } .toy-thread { top: -40px; height: 40px; } .tree-controls { margin-top: 10px; gap: 12px; } .tree-controls > span { max-width: 180px; font-size: 9px; } .tree-controls button { width: 33px; height: 33px; } .winter-values { padding: 22px 14px; } .winter-values > div { gap: 8px; flex-direction: column; text-align: center; } .winter-values span { font-size: 7px; letter-spacing: 1px; } .winter-values small { font-size: 6px; letter-spacing: 1px; } .winter-values svg { width: 22px; height: 22px; } }
-@media (prefers-reduced-motion: reduce) { .winter-dust i { animation: none; } .winter-hero *, .winter-hero *::after { transition: none !important; } }
-.motion-paused .winter-dust i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .winter-dust i, .tree-lights i { animation: none; } .winter-hero *, .winter-hero *::after { transition: none !important; } }
+.motion-paused .winter-dust i, .motion-paused .tree-lights i { animation-play-state: paused; }
 .tree-manager { padding: 24px 27px; }
 .tree-manager-list { display: grid; gap: 10px; margin-bottom: 18px; }
 .tree-manager-item { display: flex; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
