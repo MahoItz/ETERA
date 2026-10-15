@@ -5,6 +5,12 @@ import "./tree-hero.css";
 import { treeItems, type TreeOrnament } from "./tree-items";
 
 const TAU = Math.PI * 2;
+// Fixed random values keep ornaments in place while the tree rotates or React renders.
+function ornamentNoise(index: number, seed: number) {
+  let value = Math.imul(index + seed, 0x45d9f3b);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967296;
+}
 const assetUrl = (url: string) => new URL(url, `${window.location.origin}${import.meta.env.BASE_URL}`).href;
 const treeLevels = [
   { y: 23, radius: 8, scale: .72 },
@@ -16,6 +22,18 @@ const treeLevels = [
   { y: 74, radius: 24, scale: 1.12 },
   { y: 81, radius: 26, scale: 1.14 },
 ] as const;
+// Separate neighbouring heights around the tree so random positions cannot cluster.
+const ornamentPhases = treeLevels.reduce<number[]>((phases, _, index) => {
+  let phase = ornamentNoise(index, 37) * TAU;
+  const previous = phases[index - 1];
+  for (let attempt = 0; previous !== undefined && attempt < 32; attempt++) {
+    const distance = Math.abs(Math.atan2(Math.sin(phase - previous), Math.cos(phase - previous)));
+    if (distance >= 1.9) break;
+    phase = ornamentNoise(index, 151 + attempt) * TAU;
+  }
+  phases.push(phase);
+  return phases;
+}, []);
 
 export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorActions }: {
   works: Work[]; ornaments: TreeOrnament[]; ready: boolean; onOpen: (work: Work) => void; stopMotion: boolean;
@@ -137,8 +155,10 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
           })}</div>
           <div className="tree-star" aria-hidden="true">✧</div>
           {Array.from({ length: count }, (_, i) => {
-            const work = items[i], level = treeLevels[i % treeLevels.length], phase = angle + i * TAU / count + i * .21;
-            const depth = Math.cos(phase), x = 50 + Math.sin(phase) * level.radius, y = level.y + depth * 4;
+            const work = items[i], level = treeLevels[i % treeLevels.length];
+            const phase = angle + ornamentPhases[i % ornamentPhases.length];
+            const depth = Math.cos(phase), x = 50 + Math.sin(phase) * level.radius;
+            const y = level.y + (ornamentNoise(i, 113) - .5) * 2 + depth * 2;
             const style = { left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -25%) scale(${level.scale * (.83 + (depth + 1) * .12)})`, zIndex: Math.round(20 + depth * 10), opacity: .58 + (depth + 1) * .21 };
             return work ? <button key={work.id} data-work={work.id} className={`tree-toy${work.framed ? " tree-toy-framed" : ""}`} style={style} disabled={!ready} aria-label={`Рассмотреть: ${work.title}`} onClick={(e) => { if (e.detail === 0 && ready) onOpen(work.work); }}>
               <span className="toy-thread" aria-hidden="true" />
