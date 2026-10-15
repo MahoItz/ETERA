@@ -58,10 +58,11 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .category-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
 .category-list > span { padding: 9px 13px; border: 1px solid var(--line); border-radius: 22px; font-size: 12px; overflow-wrap: anywhere; }
 .category-manager { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 22px; border: 1px solid #d5b8c2; border-radius: 22px; background: #f5e8e4; margin: 18px 0; }
-.category-chip { position: relative; display: flex; align-items: center; gap: 5px; height: 48px; flex-shrink: 0; max-width: 100%; padding: 7px 8px; border: 1px solid #c7a4b7; border-radius: 22px; background: #fff8f3; box-shadow: 0 3px 8px #63374608; transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .2s, box-shadow .2s; }
+.category-chip { position: relative; display: flex; align-items: center; gap: 5px; height: 48px; flex-shrink: 0; max-width: 100%; padding: 7px 8px; border: 1px solid #c7a4b7; border-radius: 22px; background: #fff8f3; box-shadow: 0 3px 8px #63374608; transition: border-color .2s, box-shadow .2s; }
 .category-chip:hover, .category-chip:focus-within { border-color: #926080; box-shadow: 0 4px 12px #63374614; }
 .category-chip.dragging { z-index: 2; background: #fff8f3; border-color: #926080; box-shadow: 0 10px 24px #63374630; transition: border-color .2s, box-shadow .2s; }
 .category-manager.is-sorting { user-select: none; }
+.category-manager.is-sorting .category-chip:not(.dragging) { transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .2s, box-shadow .2s; }
 .category-grip { display: grid; place-items: center; width: 30px; height: 32px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: #a47b91; flex-shrink: 0; cursor: grab; touch-action: none; }
 .category-grip:hover:not(:disabled) { background: #ead3da; color: #70445f; }
 .category-grip:active { cursor: grabbing; }
@@ -82,7 +83,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
   .category-chip { width: 100%; }
   .category-chip-name { flex: 1; }
 }
-@media (prefers-reduced-motion: reduce) { .category-chip { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .category-chip, .category-manager.is-sorting .category-chip:not(.dragging) { transition: none; } }
 @media (max-width: 1000px) { .account-menu { margin-left: auto; } }
 @media (max-width: 720px) {
   .section-top:has(.section-tools > .button) { flex-wrap: wrap; }
