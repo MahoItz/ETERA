@@ -48,6 +48,8 @@ import {
   getAdminSession,
   loadCatalog,
   saveSettings,
+  saveCategories,
+  type CategoryDraft,
   saveWork,
   signIn,
   signOut,
@@ -911,6 +913,8 @@ export default function Catalog() {
           onClose={() => setSettingsSection(null)}
           onSaved={(s) => {
             setSettings(s);
+            setCategory("");
+            void load();
             setSettingsSection(null);
             setNotice("Настройки сохранены");
           }}
@@ -1584,22 +1588,47 @@ function SettingsEditor({
 }) {
   const [name, setName] = useState(settings.name),
     [contact, setContact] = useState(settings.contact),
-    [categories, setCategories] = useState(""),
+    [categories, setCategories] = useState<CategoryDraft[]>(settings.categories.map((name) => ({ key: crypto.randomUUID(), original: name, name }))),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryDrag, setCategoryDrag] = useState<{ key: string; startY: number; delta: number; from: number; to: number; step: number } | null>(null);
+  const categoryList = useRef<HTMLDivElement>(null);
+  function commitCategory() {
+    const name = categoryName.trim();
+    if (!name) { setError("Введите название категории."); return false; }
+    if (categories.some((category) => category.key !== editingCategory && category.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError("Такая категория уже есть."); return false;
+    }
+    setCategories((items) => items.map((item) => item.key === editingCategory ? { ...item, name } : item));
+    setEditingCategory(null);
+    setError("");
+    return true;
+  }
+  function moveCategory(key: string, target: number) {
+    setCategories((items) => {
+      const next = [...items];
+      const index = next.findIndex((item) => item.key === key);
+      if (index < 0 || target < 0 || target >= next.length) return items;
+      next.splice(target, 0, ...next.splice(index, 1));
+      return next;
+    });
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (editingCategory && !commitCategory()) return;
+    const finalCategories = editingCategory
+      ? categories.map((item) => item.key === editingCategory ? { ...item, name: categoryName.trim() } : item)
+      : categories;
     setBusy(true);
     setError("");
     try {
       onSaved(
-        await saveSettings({
+        section === "categories" ? { ...settings, categories: await saveCategories(finalCategories) } : await saveSettings({
           name,
           contact,
-          categories: [
-            ...settings.categories,
-            ...categories.split("\n").map((c) => c.trim()).filter(Boolean),
-          ],
+          categories: settings.categories,
         }),
       );
     } catch (e) {
@@ -1644,22 +1673,65 @@ function SettingsEditor({
           </>
         ) : (
           <>
-            <p className="form-intro">Категории помогают посетителям находить нужные работы.</p>
-            <div className="category-list" aria-label="Существующие категории">
-              {settings.categories.map((name) => <span key={name}>{name}</span>)}
+            <p className="form-intro">Нажмите на название, чтобы изменить его. Перетаскивайте категории, чтобы задать порядок на сайте.</p>
+            <div className={`category-manager${categoryDrag ? " is-sorting" : ""}`} aria-label="Категории каталога" ref={categoryList}>
+              {categories.map((item, index) => (
+                <div className={`category-chip${categoryDrag?.key === item.key ? " dragging" : ""}${editingCategory === item.key ? " editing" : ""}`} key={item.key}
+                  style={{ transform: categoryDrag ? `translateY(${categoryDrag.key === item.key ? categoryDrag.delta : index > categoryDrag.from && index <= categoryDrag.to ? -categoryDrag.step : index < categoryDrag.from && index >= categoryDrag.to ? categoryDrag.step : 0}px)` : undefined }}>
+                  <button type="button" className="category-grip" aria-label={`Перетащить категорию «${item.name}»`} disabled={busy || !!editingCategory || categories.length < 2}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      const row = event.currentTarget.closest<HTMLElement>(".category-chip");
+                      if (!row || !categoryList.current) return;
+                      event.preventDefault();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      const gap = parseFloat(getComputedStyle(categoryList.current).gap) || 0;
+                      setCategoryDrag({ key: item.key, startY: event.clientY, delta: 0, from: index, to: index, step: row.offsetHeight + gap });
+                    }}
+                    onPointerMove={(event) => {
+                      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                      setCategoryDrag((drag) => {
+                        if (!drag) return null;
+                        const delta = Math.max(-drag.from * drag.step, Math.min((categories.length - 1 - drag.from) * drag.step, event.clientY - drag.startY));
+                        return { ...drag, delta, to: Math.max(0, Math.min(categories.length - 1, drag.from + Math.round(delta / drag.step))) };
+                      });
+                    }}
+                    onPointerUp={(event) => {
+                      if (categoryDrag) moveCategory(categoryDrag.key, categoryDrag.to);
+                      setCategoryDrag(null);
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                    }}
+                    onPointerCancel={() => setCategoryDrag(null)}
+                    onLostPointerCapture={() => setCategoryDrag(null)}
+                    onKeyDown={(event) => { if (event.key === "Escape") setCategoryDrag(null); }}
+                  ><GripVertical size={16} /></button>
+                  {editingCategory === item.key ? (
+                    <input className="category-inline-input" autoFocus aria-label="Название категории" maxLength={80} value={categoryName}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) => setCategoryName(event.target.value)}
+                      onBlur={() => { commitCategory(); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") { event.preventDefault(); commitCategory(); }
+                        if (event.key === "Escape") {
+                          event.preventDefault(); event.stopPropagation();
+                          if (!item.name) setCategories((items) => items.filter((category) => category.key !== item.key));
+                          setEditingCategory(null); setError("");
+                        }
+                      }} disabled={busy} placeholder="Название категории" />
+                  ) : <button type="button" className="category-chip-name" disabled={busy || !!categoryDrag} onClick={() => { if (editingCategory && !commitCategory()) return; setEditingCategory(item.key); setCategoryName(item.name); }}>{item.name || "Новая категория"}</button>}
+                  <div className="category-chip-actions">
+                    <button type="button" className="category-remove" disabled={busy || !!categoryDrag} aria-label={`Удалить категорию «${item.name}»`} onClick={() => { setCategories((items) => items.filter((category) => category.key !== item.key)); if (editingCategory === item.key) setEditingCategory(null); }}><X size={15} /></button>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="category-add" disabled={busy || !!categoryDrag} aria-label="Добавить категорию" onClick={() => {
+                if (editingCategory && !commitCategory()) return;
+                const key = crypto.randomUUID();
+                setCategories((items) => [...items, { key, original: null, name: "" }]);
+                setEditingCategory(key); setCategoryName("");
+              }}><Plus size={22} /></button>
             </div>
-            <label>
-              Добавить категории, по одной на строку
-              <textarea
-                rows={5}
-                value={categories}
-                onChange={(e) => setCategories(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-            <p className="hint">
-              Категорию также можно добавить в форме работы. Переименование и удаление существующих категорий пока недоступны.
-            </p>
+            <p className="hint category-manager-hint">{categories.length === 0 ? "Пока нет категорий. Нажмите +, чтобы добавить первую. " : ""}Изменения применятся после сохранения. При удалении категории её работы останутся в каталоге без категории.</p>
           </>
         )}
         {error && (

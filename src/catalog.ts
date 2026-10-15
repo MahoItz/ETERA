@@ -255,6 +255,38 @@ export async function uploadPhoto(blob: Blob): Promise<{ url: string }> {
   };
 }
 
+export type CategoryDraft = { key: string; original: string | null; name: string };
+
+export async function saveCategories(categories: CategoryDraft[]): Promise<string[]> {
+  const names = categories.map((category) => category.name.trim());
+  if (names.some((name) => !name || name.length > 80)) throw new Error("Название категории должно содержать от 1 до 80 символов.");
+  if (new Set(names.map((name) => name.toLocaleLowerCase())).size !== names.length) throw new Error("Названия категорий не должны повторяться.");
+  const existing = await supabase.from("categories").select("id, name");
+  fail(existing.error);
+  const rows = existing.data ?? [];
+  // Keep category IDs so renaming also updates the names shown on related works.
+  for (const category of categories) {
+    const row = rows.find((row) => row.name === category.original);
+    const conflict = rows.find((other) => other.name === category.name.trim() && other.id !== row?.id);
+    if (conflict) throw new Error(`Название «${conflict.name}» уже занято. Сначала переименуйте или удалите эту категорию и сохраните изменения.`);
+    if (category.original && !row) throw new Error("Категории изменились. Закройте окно и обновите каталог.");
+  }
+  for (const [position, category] of categories.entries()) {
+    const row = rows.find((row) => row.name === category.original);
+    const payload = { name: names[position], position };
+    const result = row
+      ? await supabase.from("categories").update(payload).eq("id", row.id)
+      : await supabase.from("categories").insert(payload);
+    fail(result.error);
+  }
+  const removed = rows.filter((row) => !categories.some((category) => category.original === row.name));
+  if (removed.length) {
+    const result = await supabase.from("categories").delete().in("id", removed.map((row) => row.id));
+    fail(result.error);
+  }
+  return names;
+}
+
 export async function saveSettings(input: Settings): Promise<Settings> {
   const names = [
     ...new Set(input.categories.map((name) => name.trim()).filter(Boolean)),
