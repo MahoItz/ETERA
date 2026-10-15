@@ -92,7 +92,10 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
       <div className="winter-dust" aria-hidden="true">{Array.from({ length: 22 }, (_, i) => <i key={i} style={{ left: `${(i * 43 + 7) % 100}%`, top: `${(i * 31 + 12) % 100}%`, animationDelay: `${i * -.7}s` }} />)}</div>
       <div className="winter-copy">
         <div className="winter-eyebrow"><Sparkles size={16} /> МАЛЕНЬКОЕ НОВОГОДНЕЕ ЧУДО <span /></div>
-        <h1>Волшебные<br />украшения,<br /><em>в которых живёт</em><br /><span>тепло.</span></h1>
+        <h1>
+          <span className="winter-title-line">Волшебные украшения,</span>{" "}
+          <span className="winter-title-line"><em>в которых живёт </em><span className="winter-title-warmth">тепло.</span></span>
+        </h1>
         <p>Авторские ёлочные игрушки ручной работы.<br />Немного волшебства. Много души.<br />И особая история для вашего дома.</p>
       </div>
       <div className="winter-tree-area">
