@@ -110,7 +110,7 @@ on conflict (id) do update set public = excluded.public, file_size_limit = exclu
 create policy "public can view work photos" on storage.objects for select to anon, authenticated using (bucket_id = 'work-photos');
 create policy "admins manage work photos" on storage.objects for all to authenticated using (bucket_id = 'work-photos' and public.is_admin()) with check (bucket_id = 'work-photos' and public.is_admin());
 
-insert into public.site_settings (id, name, contact) values (true, 'Мамина мастерская', '') on conflict (id) do nothing;
+insert into public.site_settings (id, name, contact) values (true, 'Etera', '') on conflict (id) do nothing;
 insert into public.categories (name, position) values ('Феи и балерины', 10), ('Барашки', 20), ('Декор для дома', 30) on conflict (name) do nothing;
 
 -- The original two works are retained as metadata. Their images stay in the Vite public folder

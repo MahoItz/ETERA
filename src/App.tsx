@@ -602,8 +602,8 @@ export default function Catalog() {
             <div className="story-picture" data-reveal>
               <div className="story-image-wrap">
                 <img
-                  src={imageUrl("images/fairies.jpg")}
-                  alt="Детали ручной росписи фей-балерин"
+                  src={imageUrl("images/Master.webp")}
+                  alt="Мастер за работой"
                   loading="lazy"
                 />
               </div>

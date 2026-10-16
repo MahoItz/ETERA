@@ -1,7 +1,7 @@
 export type Photo = {url:string; alt:string};
 export type Work = {id:string; title:string; description:string; category:string; material:string; dimensions:string; price:number|null; availability:'available'|'order'|'sold'; status:'published'|'draft'|'archived'; featured:boolean; treeImage?:string|null; showOnTree?:boolean; photos:Photo[]; revision:number; updatedAt:string};
 export type Settings = {name:string; contact:string; categories:string[]};
-export const defaults:Settings={name:'Мамина мастерская',contact:'',categories:['Феи и балерины','Барашки','Декор для дома']};
+export const defaults:Settings={name:'Etera',contact:'',categories:['Феи и балерины','Барашки','Декор для дома']};
 export const seed:Work[]=[
 {id:'fairies',title:'Феи-балерины',description:'Подвесные фигурки из гипса с ручной росписью. Разные цвета, маленькие детали и праздничное настроение. На фотографии — коллекция работ; цвет и исполнение можно обсудить с мастером.',category:'Феи и балерины',material:'Гипс',dimensions:'',price:null,availability:'order',status:'published',featured:true,photos:[{url:'/images/fairies.jpg',alt:'Коллекция расписанных фей-балерин'}],revision:1,updatedAt:'2026-10-13T10:00:00Z'},
 {id:'lambs',title:'Барашки с золотым бантом',description:'Декоративные подвески из гипса с ручной росписью. Мягкие оттенки, фактурная шерстка и золотые акценты. На фотографии — два варианта работы.',category:'Барашки',material:'Гипс',dimensions:'',price:null,availability:'order',status:'published',featured:false,photos:[{url:'/images/lambs.jpg',alt:'Две подвески с белыми барашками и золотыми бантами'}],revision:1,updatedAt:'2026-10-12T10:00:00Z'}
