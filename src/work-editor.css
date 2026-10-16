@@ -1,7 +1,8 @@
 .editor-form.work-editor { padding: 0; }
 .work-intro { padding: 0 27px; margin: 20px 0; }
 .work-editor-layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr); gap: 28px; padding: 0 27px 24px; align-items: start; }
-.work-photo-panel, .work-details-panel { min-width: 0; }
+.work-media-column, .work-photo-panel, .work-details-panel { min-width: 0; }
+.work-media-column { display: grid; gap: 18px; }
 .work-photo-panel { border: 1px solid #d5b8c2; border-radius: 22px; background: #f1e2e6; padding: 18px; }
 .work-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .work-section-heading h3 { font-family: var(--font-body, inherit); font-size: 18px; font-weight: 500; margin: 0; }
@@ -59,11 +60,23 @@
 .work-featured > span { flex: 1; }
 .work-featured > svg { color: #926080; }
 .variant-add { padding: 8px 11px; font-size: 10px; }
+.variant-section { border: 1px solid #d5b8c2; border-radius: 18px; background: #f8ece5; padding: 16px; }
+.variant-section .work-section-heading { align-items: flex-start; }
+.variant-section .work-section-heading > div > span { display: block; margin-top: 3px; color: #805469; font-size: 10px; }
 .variant-list { display: grid; gap: 12px; }
-.variant-editor { padding: 14px; border: 1px solid #d9c0cd; border-radius: 13px; background: #fff8f3a8; }
+.variant-editor { padding: 14px; border: 1px solid #d9c0cd; border-radius: 13px; background: #fff8f3; }
 .variant-editor-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: #70445f; }
 .variant-editor-heading .icon-button { width: 28px; height: 28px; }
 .variant-editor > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; margin-bottom: 13px; }
+.variant-fields { margin-bottom: 13px; }
+.variant-fields > label { margin: 0; }
+.variant-photo-picker > span { display: block; margin-bottom: 7px; color: #805469; font-size: 10px; }
+.variant-photo-picker > div { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
+.variant-photo-picker button { position: relative; flex: 0 0 47px; width: 47px; height: 47px; padding: 2px; border: 2px solid transparent; border-radius: 9px; background: #ead3da; overflow: hidden; }
+.variant-photo-picker button.selected { border-color: #926080; }
+.variant-photo-picker img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+.variant-photo-picker small { position: absolute; right: 2px; bottom: 2px; min-width: 15px; padding: 2px 4px; border-radius: 5px; background: #fff8f3e8; color: #70445f; font-size: 8px; }
+.variant-add-bottom { display: flex; width: 100%; justify-content: center; margin-top: 12px; }
 .work-form-error { margin: 0 27px 20px; white-space: pre-line; }
 .work-editor-footer { position: sticky; bottom: 0; z-index: 6; background: #f8ece5f5; backdrop-filter: blur(8px); padding: 16px 27px; align-items: center; box-shadow: 0 -6px 20px #63374608; }
 .work-editor-footer > span { margin-right: auto; font-size: 11px; color: #805469; }
@@ -72,6 +85,7 @@
   .work-editor-layout { grid-template-columns: 1fr; gap: 24px; padding: 0 18px 20px; }
   .work-intro { padding: 0 18px; }
   .work-photo-panel { padding: 14px; }
+  .variant-section { padding: 14px; }
   .work-photo-stage { aspect-ratio: 4 / 3; max-height: 360px; }
   .work-photo-empty { gap: 8px; }
   .work-upload-icon { width: 46px; height: 46px; }

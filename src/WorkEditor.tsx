@@ -146,21 +146,29 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
     setBusy(true); setError(""); setProgress("Сохраняем работу");
     try {
       const savedPhotos: Photo[] = [];
+      const photoUrlMap = new Map<string, string>();
       for (const photo of photos) {
         const staged = pending.current.get(photo.url);
-        if (!staged) { savedPhotos.push(photo); continue; }
+        if (!staged) { savedPhotos.push(photo); photoUrlMap.set(photo.url, photo.url); continue; }
         if (!staged.uploaded) {
           setProgress(`Загружаем фото ${savedPhotos.length + 1} из ${photos.length}`);
           const uploaded = await uploadPhoto(staged.blob);
           staged.uploaded = { url: uploaded.url, alt: photo.alt };
         }
         savedPhotos.push(staged.uploaded);
+        photoUrlMap.set(photo.url, staged.uploaded.url);
       }
+      const savedVariants = variants.map((variant, position) => ({
+        ...variant,
+        name: variant.name.trim(),
+        imageUrl: variant.imageUrl ? photoUrlMap.get(variant.imageUrl) ?? savedPhotos[0]?.url ?? null : null,
+        position,
+      }));
       setProgress("Сохраняем работу");
       onSaved(await saveWork(work?.id ?? null, {
         title, description, category, material, dimensions, price: price.trim() ? Number(price) : null,
         availability, status, featured, photos: savedPhotos,
-        variants: variants.map((variant, position) => ({ ...variant, name: variant.name.trim(), position })), revision: work?.revision,
+        variants: savedVariants, revision: work?.revision,
         treeImage: work?.treeImage, showOnTree: work?.showOnTree,
       }));
     } catch (error) { setError(error instanceof Error ? error.message : "Не удалось сохранить работу. Попробуйте ещё раз."); }
@@ -171,6 +179,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
     <form className="editor-form work-editor" onSubmit={submit}>
       <p className="form-intro work-intro">Сначала фотографии и название, затем детали. Незавершённую работу можно сохранить в черновики.</p>
       <div className="work-editor-layout">
+        <div className="work-media-column">
         <section className="work-photo-panel" aria-labelledby="work-photos-title"
           onDragEnter={(event) => { if (isFileDrag(event)) { event.preventDefault(); dragDepth.current++; if (!busy && photos.length < 8) setDragOver(true); } }}
           onDragOver={(event) => { if (isFileDrag(event)) { event.preventDefault(); event.dataTransfer.dropEffect = busy || photos.length >= 8 ? "none" : "copy"; } }}
@@ -220,6 +229,29 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
           <p className="hint">JPG, PNG или WebP · до 20 МБ за фото. Первое фото станет обложкой.<span className="desktop-drop-hint"> Порядок фото можно менять перетаскиванием.</span></p>
           {busy && <p className="work-progress" role="status"><Loader2 size={16} className="spin" />{progress}</p>}
         </section>
+        <section className="variant-section" aria-labelledby="work-variants-title">
+          <div className="work-section-heading">
+            <div><h3 id="work-variants-title">Отдельные фигурки</h3><span>{variants.length ? `${variants.length} добавлено` : "Добавьте фигурки из этой коллекции"}</span></div>
+            <button type="button" className="button secondary variant-add" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить</button>
+          </div>
+          {!photos.length && <p className="hint">Сначала добавьте фотографии работы выше — они появятся здесь для выбора.</p>}
+          <div className="variant-list">
+            {variants.map((variant, index) => <div className="variant-editor" key={variant.id}>
+              <div className="variant-editor-heading"><span>Фигурка {index + 1}</span><button type="button" className="icon-button" disabled={busy} aria-label={`Удалить фигурку ${index + 1}`} onClick={() => setVariants((items) => items.filter((item) => item.id !== variant.id))}><X size={15} /></button></div>
+              <label>Название<input required maxLength={120} value={variant.name} onChange={(event) => updateVariant(variant.id, { name: event.target.value })} placeholder="Например, Фея с золотыми крыльями" disabled={busy} /></label>
+              <div className="variant-fields form-row">
+                <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={(event) => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
+                <label>Доступность<select value={variant.availability} onChange={(event) => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
+              </div>
+              {!!photos.length && <div className="variant-photo-picker" role="group" aria-label={`Фото фигурки ${index + 1}`}>
+                <span>Фото фигурки</span>
+                <div>{photos.map((photo, photoIndex) => <button type="button" key={photo.url} className={variant.imageUrl === photo.url ? "selected" : ""} aria-label={`Выбрать фото ${photoIndex + 1}`} aria-pressed={variant.imageUrl === photo.url} disabled={busy} onClick={() => updateVariant(variant.id, { imageUrl: photo.url })}><img src={imageUrl(photo.url)} alt="" /><small>{photoIndex + 1}</small></button>)}</div>
+              </div>}
+            </div>)}
+          </div>
+          <button type="button" className="button secondary variant-add variant-add-bottom" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить ещё фигурку</button>
+        </section>
+        </div>
 
         <div className="work-details-panel">
           <section className="work-form-section" aria-labelledby="work-about-title">
@@ -243,24 +275,6 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
             </div>
             <label className="checkbox work-featured"><input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} disabled={busy} /><span>Закрепить в начале каталога</span><Star size={15} /></label>
             <p className="hint">{status === "draft" ? "Черновик виден только в редакторе. Дополните его и добавьте в каталог, когда всё будет готово." : status === "archived" ? "Архивная работа видна только в редакторе." : "Для показа в каталоге нужно хотя бы одно фото. Проданные работы видны только в редакторе."}</p>
-          </section>
-          <section className="work-form-section" aria-labelledby="work-variants-title">
-            <div className="work-section-heading">
-              <h3 id="work-variants-title">Отдельные фигурки</h3>
-              <button type="button" className="button secondary variant-add" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить</button>
-            </div>
-            <p className="hint">Добавьте фото фигурок в галерею слева, затем выберите нужное для каждой из них.</p>
-            <div className="variant-list">
-              {variants.map((variant, index) => <div className="variant-editor" key={variant.id}>
-                <div className="variant-editor-heading"><span>Фигурка {index + 1}</span><button type="button" className="icon-button" disabled={busy} aria-label={`Удалить фигурку ${index + 1}`} onClick={() => setVariants((items) => items.filter((item) => item.id !== variant.id))}><X size={15} /></button></div>
-                <label>Название<input required maxLength={120} value={variant.name} onChange={(event) => updateVariant(variant.id, { name: event.target.value })} placeholder="Например, Фея с золотыми крыльями" disabled={busy} /></label>
-                <div className="form-row">
-                  <label>Фото<select value={variant.imageUrl ?? ""} onChange={(event) => updateVariant(variant.id, { imageUrl: event.target.value || null })} disabled={busy || !photos.length}><option value="">Общее фото коллекции</option>{photos.map((photo, photoIndex) => <option key={photo.url} value={photo.url}>Фото {photoIndex + 1}</option>)}</select></label>
-                  <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={(event) => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
-                </div>
-                <label>Доступность<select value={variant.availability} onChange={(event) => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
-              </div>)}
-            </div>
           </section>
         </div>
       </div>

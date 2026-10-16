@@ -57,7 +57,7 @@ function mapWork(row: WorkRow): Work {
     variants: (row.variants ?? [])
       .sort((a, b) => a.position - b.position)
       .map(({ id, name, image_url, price, availability, position }) => ({
-        id, name, imageUrl: image_url ?? null, price: price === null ? null : Number(price), availability, position,
+        id, name, imageUrl: image_url?.startsWith("blob:") ? null : image_url ?? null, price: price === null ? null : Number(price), availability, position,
       })),
     revision: row.revision,
     updatedAt: row.updated_at,
