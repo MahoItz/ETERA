@@ -1,4 +1,5 @@
 import { Modal, imageUrl, compressPhoto } from "./EditorUI";
+import { PhotoLightbox } from "./PhotoLightbox";
 import { WorkEditor } from "./WorkEditor";
 import { TreeHero } from "./TreeHero";
 import { treeItems, type TreeOrnament } from "./tree-items";
@@ -19,6 +20,7 @@ import {
   Flower2,
   GripVertical,
   ImagePlus,
+  Maximize2,
   Eye,
   LogOut,
   LockKeyhole,
@@ -147,6 +149,7 @@ export default function Catalog() {
     [limit, setLimit] = useState(24);
   const [selected, setSelected] = useState<Work | null>(null),
     [photoIndex, setPhotoIndex] = useState(0),
+    [lightboxOpen, setLightboxOpen] = useState(false),
     [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
@@ -191,7 +194,7 @@ export default function Catalog() {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
-    if (!selected || selected.photos.length < 2) return;
+    if (!selected || lightboxOpen || selected.photos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") {
         setSelectedVariantId(null);
@@ -206,7 +209,7 @@ export default function Catalog() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selected]);
+  }, [selected, lightboxOpen]);
   useEffect(() => {
     if (
       motionPaused ||
@@ -267,7 +270,14 @@ export default function Catalog() {
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const lightboxPhotos = [...(selected?.photos ?? [])];
+  for (const variant of selected?.variants ?? []) {
+    if (variant.imageUrl && !lightboxPhotos.some((photo) => photo.url === variant.imageUrl)) {
+      lightboxPhotos.push({ url: variant.imageUrl, alt: variant.name });
+    }
+  }
   function open(w: Work) {
+    setLightboxOpen(false);
     setSelected(w);
     setPhotoIndex(0);
     setSelectedVariantId(null);
@@ -719,11 +729,19 @@ export default function Catalog() {
             <div className="gallery">
               <div className="gallery-main">
                 {selected.photos[photoIndex] ? (
-                  <img
-                    key={selected.id + "-" + photoIndex}
-                    src={imageUrl(selectedVariant?.imageUrl ?? selected.photos[photoIndex].url)}
-                    alt={selectedVariant?.name || selected.photos[photoIndex].alt || selected.title}
-                  />
+                  <button
+                    type="button"
+                    className="gallery-expand"
+                    onClick={() => setLightboxOpen(true)}
+                    aria-label="Открыть фото на весь экран"
+                  >
+                    <img
+                      key={selected.id + "-" + photoIndex + "-" + (selectedVariant?.id ?? "")}
+                      src={imageUrl(selectedVariant?.imageUrl ?? selected.photos[photoIndex].url)}
+                      alt={selectedVariant?.name || selected.photos[photoIndex].alt || selected.title}
+                    />
+                    <span className="gallery-expand-hint" aria-hidden="true"><Maximize2 size={18} /></span>
+                  </button>
                 ) : (
                   <ImagePlus />
                 )}
@@ -765,6 +783,14 @@ export default function Catalog() {
                 </div>
               )}
             </div>
+            {lightboxOpen && lightboxPhotos.length > 0 && (
+              <PhotoLightbox
+                title={selected.title}
+                photos={lightboxPhotos}
+                initialIndex={Math.max(0, lightboxPhotos.findIndex((photo) => photo.url === (selectedVariant?.imageUrl ?? selected.photos[photoIndex]?.url)))}
+                onClose={() => setLightboxOpen(false)}
+              />
+            )}
             <div className="detail-copy">
               <div className="eyebrow">{selected.category}</div>
               <h2>{selected.title}</h2>
