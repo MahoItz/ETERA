@@ -58,6 +58,12 @@
 .work-featured { padding: 12px; background: #ead3da70; border-radius: 12px; }
 .work-featured > span { flex: 1; }
 .work-featured > svg { color: #926080; }
+.variant-add { padding: 8px 11px; font-size: 10px; }
+.variant-list { display: grid; gap: 12px; }
+.variant-editor { padding: 14px; border: 1px solid #d9c0cd; border-radius: 13px; background: #fff8f3a8; }
+.variant-editor-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: #70445f; }
+.variant-editor-heading .icon-button { width: 28px; height: 28px; }
+.variant-editor > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; margin-bottom: 13px; }
 .work-form-error { margin: 0 27px 20px; white-space: pre-line; }
 .work-editor-footer { position: sticky; bottom: 0; z-index: 6; background: #f8ece5f5; backdrop-filter: blur(8px); padding: 16px 27px; align-items: center; box-shadow: 0 -6px 20px #63374608; }
 .work-editor-footer > span { margin-right: auto; font-size: 11px; color: #805469; }

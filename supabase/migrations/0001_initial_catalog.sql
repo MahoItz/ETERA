@@ -45,6 +45,7 @@ create table public.variants (
   id uuid primary key default gen_random_uuid(),
   work_id uuid not null references public.works(id) on delete cascade,
   name text not null check (char_length(name) between 1 and 120),
+  image_url text check (image_url is null or char_length(image_url) <= 1000),
   finish text not null default '' check (char_length(finish) <= 100),
   price numeric(12,2) check (price is null or price >= 0),
   availability text not null default 'order' check (availability in ('available', 'order', 'sold')),

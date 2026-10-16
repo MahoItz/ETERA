@@ -1,5 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
-import { defaults, type Photo, type Settings, type Work } from "../lib/model";
+import { defaults, type Photo, type Settings, type Variant, type Work } from "../lib/model";
 import { supabase } from "./supabase";
 import type { TreeOrnament } from "./tree-items";
 
@@ -24,6 +24,14 @@ type WorkRow = Record<string, unknown> & {
     position: number;
     storage_path?: string | null;
   }>;
+  variants?: Array<{
+    id: string;
+    name: string;
+    image_url?: string | null;
+    price: number | null;
+    availability: Variant["availability"];
+    position: number;
+  }>;
 };
 
 function fail(error: { message: string } | null) {
@@ -46,6 +54,11 @@ function mapWork(row: WorkRow): Work {
     photos: (row.photos ?? [])
       .sort((a, b) => a.position - b.position)
       .map(({ url, alt }) => ({ url, alt })),
+    variants: (row.variants ?? [])
+      .sort((a, b) => a.position - b.position)
+      .map(({ id, name, image_url, price, availability, position }) => ({
+        id, name, imageUrl: image_url ?? null, price: price === null ? null : Number(price), availability, position,
+      })),
     revision: row.revision,
     updatedAt: row.updated_at,
   };
@@ -60,7 +73,7 @@ export async function loadCatalog(): Promise<{
   const [worksResult, settingsResult, categoriesResult, ornamentsResult] = await Promise.all([
     supabase
       .from("works")
-      .select("*, category:categories(name), photos(*)")
+      .select("*, category:categories(name), photos(*), variants(*)")
       .order("featured", { ascending: false })
       .order("updated_at", { ascending: false }),
     supabase
@@ -180,9 +193,24 @@ export async function saveWork(
   }
   if (removedPaths.length)
     await supabase.storage.from("work-photos").remove(removedPaths);
+  const removedVariants = await supabase.from("variants").delete().eq("work_id", workId!);
+  fail(removedVariants.error);
+  if (input.variants.length) {
+    const insertedVariants = await supabase.from("variants").insert(
+      input.variants.map((variant, position) => ({
+        work_id: workId,
+        name: variant.name.trim(),
+        image_url: variant.imageUrl,
+        price: variant.price,
+        availability: variant.availability,
+        position,
+      })),
+    );
+    fail(insertedVariants.error);
+  }
   const fresh = await supabase
     .from("works")
-    .select("*, category:categories(name), photos(*)")
+    .select("*, category:categories(name), photos(*), variants(*)")
     .eq("id", workId!)
     .single();
   fail(fresh.error);

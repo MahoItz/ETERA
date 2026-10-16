@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, X } from "lucide-react";
-import type { Photo, Work } from "../lib/model";
+import type { Photo, Variant, Work } from "../lib/model";
 import { saveWork, uploadPhoto } from "./catalog";
 import { Modal, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
@@ -76,6 +76,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
   const [status, setStatus] = useState<Work["status"]>(work?.status || "draft");
   const [featured, setFeatured] = useState(work?.featured || false);
   const [photos, setPhotos] = useState<Photo[]>(work?.photos || []);
+  const [variants, setVariants] = useState<Variant[]>(work?.variants || []);
   const [activePhoto, setActivePhoto] = useState(work?.photos[0]?.url || "");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -126,11 +127,21 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
     setPhotos((items) => items.filter((photo) => photo.url !== url));
     if (activePhoto === url) setActivePhoto(photos.find((photo) => photo.url !== url)?.url || "");
   }
+  function addVariant() {
+    setVariants((items) => [...items, {
+      id: crypto.randomUUID(), name: "", imageUrl: photos[0]?.url ?? null,
+      price: null, availability: "available", position: items.length,
+    }]);
+  }
+  function updateVariant(id: string, changes: Partial<Variant>) {
+    setVariants((items) => items.map((variant) => variant.id === id ? { ...variant, ...changes } : variant));
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || processing.current) return;
     if (!title.trim()) { setError("Добавьте название работы."); return; }
     if (!category.trim()) { setError("Выберите или добавьте категорию."); return; }
+    if (variants.some((variant) => !variant.name.trim())) { setError("Добавьте название каждой отдельной фигурке."); return; }
     if (status === "published" && !photos.length) { setError("Добавьте хотя бы одно фото, чтобы показать работу в каталоге."); return; }
     setBusy(true); setError(""); setProgress("Сохраняем работу");
     try {
@@ -148,7 +159,8 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
       setProgress("Сохраняем работу");
       onSaved(await saveWork(work?.id ?? null, {
         title, description, category, material, dimensions, price: price.trim() ? Number(price) : null,
-        availability, status, featured, photos: savedPhotos, revision: work?.revision,
+        availability, status, featured, photos: savedPhotos,
+        variants: variants.map((variant, position) => ({ ...variant, name: variant.name.trim(), position })), revision: work?.revision,
         treeImage: work?.treeImage, showOnTree: work?.showOnTree,
       }));
     } catch (error) { setError(error instanceof Error ? error.message : "Не удалось сохранить работу. Попробуйте ещё раз."); }
@@ -231,6 +243,24 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
             </div>
             <label className="checkbox work-featured"><input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} disabled={busy} /><span>Закрепить в начале каталога</span><Star size={15} /></label>
             <p className="hint">{status === "draft" ? "Черновик виден только в редакторе. Дополните его и добавьте в каталог, когда всё будет готово." : status === "archived" ? "Архивная работа видна только в редакторе." : "Для показа в каталоге нужно хотя бы одно фото. Проданные работы видны только в редакторе."}</p>
+          </section>
+          <section className="work-form-section" aria-labelledby="work-variants-title">
+            <div className="work-section-heading">
+              <h3 id="work-variants-title">Отдельные фигурки</h3>
+              <button type="button" className="button secondary variant-add" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить</button>
+            </div>
+            <p className="hint">Добавьте фото фигурок в галерею слева, затем выберите нужное для каждой из них.</p>
+            <div className="variant-list">
+              {variants.map((variant, index) => <div className="variant-editor" key={variant.id}>
+                <div className="variant-editor-heading"><span>Фигурка {index + 1}</span><button type="button" className="icon-button" disabled={busy} aria-label={`Удалить фигурку ${index + 1}`} onClick={() => setVariants((items) => items.filter((item) => item.id !== variant.id))}><X size={15} /></button></div>
+                <label>Название<input required maxLength={120} value={variant.name} onChange={(event) => updateVariant(variant.id, { name: event.target.value })} placeholder="Например, Фея с золотыми крыльями" disabled={busy} /></label>
+                <div className="form-row">
+                  <label>Фото<select value={variant.imageUrl ?? ""} onChange={(event) => updateVariant(variant.id, { imageUrl: event.target.value || null })} disabled={busy || !photos.length}><option value="">Общее фото коллекции</option>{photos.map((photo, photoIndex) => <option key={photo.url} value={photo.url}>Фото {photoIndex + 1}</option>)}</select></label>
+                  <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={(event) => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
+                </div>
+                <label>Доступность<select value={variant.availability} onChange={(event) => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
+              </div>)}
+            </div>
           </section>
         </div>
       </div>

@@ -285,6 +285,14 @@ footer small { display: flex; gap: 6px; align-items: center; }
 .availability { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #84505e; margin-bottom: 25px; }
 .availability > span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .detail-copy > p { font-size: 12px; line-height: 1.9; color: #775365; }
+.variant-picker { margin: 22px 0; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.variant-picker h3 { margin: 0 0 12px; font-family: var(--font-body, inherit); font-size: 13px; font-weight: 500; }
+.variant-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.variant-options button { display: grid; grid-template-columns: 38px 1fr; column-gap: 9px; align-items: center; min-width: 0; padding: 7px; border: 1px solid #d8bccf; border-radius: 11px; background: #fff8f3; text-align: left; color: var(--ink); }
+.variant-options button:hover, .variant-options button.selected { border-color: #926080; background: #eedeea; }
+.variant-options img, .variant-options svg { grid-row: span 2; width: 38px; height: 38px; object-fit: cover; border-radius: 7px; color: #9a6c91; background: #ead3da; padding: 3px; }
+.variant-options span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.variant-options small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7b596f; font-size: 9px; }
 .detail-copy dl { display: grid; grid-template-columns: 90px 1fr; gap: 12px; margin: 24px 0; font-size: 11px; padding: 19px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 dt { color: var(--muted); }
 dd { margin: 0; }

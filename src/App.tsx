@@ -147,6 +147,7 @@ export default function Catalog() {
     [limit, setLimit] = useState(24);
   const [selected, setSelected] = useState<Work | null>(null),
     [photoIndex, setPhotoIndex] = useState(0),
+    [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
   const canEdit = admin && editingEnabled;
@@ -261,9 +262,11 @@ export default function Catalog() {
       )
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
+  const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
   function open(w: Work) {
     setSelected(w);
     setPhotoIndex(0);
+    setSelectedVariantId(null);
   }
   function saved(w: Work) {
     setWorks((list) => [w, ...list.filter((x) => x.id !== w.id)]);
@@ -692,8 +695,8 @@ export default function Catalog() {
                 {selected.photos[photoIndex] ? (
                   <img
                     key={selected.id + "-" + photoIndex}
-                    src={imageUrl(selected.photos[photoIndex].url)}
-                    alt={selected.photos[photoIndex].alt || selected.title}
+                    src={imageUrl(selectedVariant?.imageUrl ?? selected.photos[photoIndex].url)}
+                    alt={selectedVariant?.name || selected.photos[photoIndex].alt || selected.title}
                   />
                 ) : (
                   <ImagePlus />
@@ -749,9 +752,28 @@ export default function Catalog() {
               <h2>{selected.title}</h2>
               <span className="availability">
                 <span />
-                {labels[selected.availability]}
+                {labels[selectedVariant?.availability ?? selected.availability]}
               </span>
               <p>{selected.description}</p>
+              {selected.variants.length > 0 && (
+                <section className="variant-picker" aria-label="Выбор фигурки">
+                  <h3>Выберите фигурку</h3>
+                  <div className="variant-options">
+                    {selected.variants.map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        className={selectedVariantId === variant.id ? "selected" : ""}
+                        onClick={() => setSelectedVariantId(variant.id)}
+                      >
+                        {variant.imageUrl ? <img src={imageUrl(variant.imageUrl)} alt="" /> : <ImagePlus size={18} />}
+                        <span>{variant.name}</span>
+                        <small>{labels[variant.availability]}{variant.price !== null ? ` · ${money(variant.price)}` : ""}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
               <dl>
                 {selected.material && (
                   <>
@@ -768,7 +790,7 @@ export default function Catalog() {
                 <dt>Исполнение</dt>
                 <dd>Ручная работа</dd>
               </dl>
-              <strong className="price">{money(selected.price)}</strong>
+              <strong className="price">{money(selectedVariant?.price ?? selected.price)}</strong>
               {settings.contact ? (
                 <a
                   href={settings.contact}
