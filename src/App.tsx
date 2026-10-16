@@ -280,6 +280,13 @@ export default function Catalog() {
     setEditing(undefined);
     setNotice("Работа сохранена. Она доступна и с другого устройства.");
   }
+  async function removeWork(work: Work) {
+    setWorks((items) => items.filter((item) => item.id !== work.id));
+    setOrnaments((items) => items.filter((item) => item.workId !== work.id));
+    setSelected((item) => item?.id === work.id ? null : item);
+    setEditing(undefined);
+    setNotice("Работа удалена.");
+  }
   function toggleEditing() {
     setEditingEnabled((enabled) => !enabled);
     setScope("published");
@@ -827,6 +834,7 @@ export default function Catalog() {
           materials={[...new Set(works.map((item) => item.material).filter(Boolean))]}
           onClose={() => setEditing(undefined)}
           onSaved={saved}
+          onDeleted={removeWork}
         />
       )}
       {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments}

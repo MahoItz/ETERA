@@ -217,6 +217,68 @@ export async function saveWork(
   return mapWork(fresh.data as WorkRow);
 }
 
+export async function deleteWork(id: string, revision: number) {
+  // Keep the storage keys before the cascading database delete removes the rows
+  // that describe them.
+  const [photos, ornaments] = await Promise.all([
+    supabase.from("photos").select("url, storage_path").eq("work_id", id),
+    supabase.from("tree_ornaments").select("image_url").eq("work_id", id),
+  ]);
+  fail(photos.error);
+  fail(ornaments.error);
+
+  const deleted = await supabase
+    .from("works")
+    .delete()
+    .eq("id", id)
+    .eq("revision", revision)
+    .select("id")
+    .maybeSingle();
+  fail(deleted.error);
+  if (!deleted.data) {
+    throw new Error(
+      "Работу уже изменили или удалили на другом устройстве. Обновите каталог.",
+    );
+  }
+
+  const paths = new Set<string>();
+  for (const photo of photos.data ?? []) {
+    if (photo.storage_path) paths.add(photo.storage_path);
+  }
+  for (const ornament of ornaments.data ?? []) {
+    const path = storagePathFromUrl(ornament.image_url);
+    if (path) paths.add(path);
+  }
+  if (!paths.size) return;
+
+  // URLs can be deliberately reused by another catalogue item, so only remove
+  // files that are no longer referenced anywhere.
+  const urls = [
+    ...(photos.data ?? []).map((photo) => photo.url),
+    ...(ornaments.data ?? []).map((ornament) => ornament.image_url),
+  ];
+  const [usedPhotos, usedOrnaments, usedVariants] = await Promise.all([
+    supabase.from("photos").select("url").in("url", urls),
+    supabase.from("tree_ornaments").select("image_url").in("image_url", urls),
+    supabase.from("variants").select("image_url").in("image_url", urls),
+  ]);
+  if (usedPhotos.error || usedOrnaments.error || usedVariants.error) return;
+  const usedUrls = new Set([
+    ...(usedPhotos.data ?? []).map((photo) => photo.url),
+    ...(usedOrnaments.data ?? []).map((ornament) => ornament.image_url),
+    ...(usedVariants.data ?? []).flatMap((variant) => variant.image_url ? [variant.image_url] : []),
+  ]);
+  const unusedPaths = [...paths].filter((path) => !usedUrls.has(
+    supabase.storage.from("work-photos").getPublicUrl(path).data.publicUrl,
+  ));
+  // The catalogue record has already been deleted successfully. A failed
+  // best-effort storage cleanup must not report that deletion itself failed.
+  if (unusedPaths.length) {
+    const removed = await supabase.storage.from("work-photos").remove(unusedPaths);
+    if (removed.error) console.warn("Не удалось очистить файлы удалённой работы:", removed.error.message);
+  }
+}
+
 export async function saveTreeOrnament(input: TreeOrnament): Promise<TreeOrnament> {
   const result = await supabase.from("tree_ornaments").upsert({
     id: input.id, title: input.title.trim(), image_url: input.imageUrl,

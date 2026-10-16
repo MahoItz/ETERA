@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
-import { saveWork, uploadPhoto } from "./catalog";
+import { deleteWork, saveWork, uploadPhoto } from "./catalog";
 import { Modal, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
 
@@ -62,9 +62,10 @@ function EditableChoice({ label, value, options, onChange, disabled, required = 
   </div>;
 }
 
-export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
+export function WorkEditor({ work, categories, materials, onClose, onSaved, onDeleted }: {
   work: Work | null; categories: string[]; materials: string[];
   onClose: () => void; onSaved: (work: Work) => void;
+  onDeleted: (work: Work) => Promise<void>;
 }) {
   const [title, setTitle] = useState(work?.title || "");
   const [description, setDescription] = useState(work?.description || "");
@@ -81,6 +82,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [draggedPhoto, setDraggedPhoto] = useState<string | null>(null);
   const pending = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
@@ -174,8 +176,19 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
     } catch (error) { setError(error instanceof Error ? error.message : "Не удалось сохранить работу. Попробуйте ещё раз."); }
     finally { setBusy(false); setProgress(""); }
   }
+  async function remove() {
+    if (!work || busy) return;
+    setBusy(true); setError(""); setProgress("Удаляем работу");
+    try {
+      await deleteWork(work.id, work.revision);
+      await onDeleted(work);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Не удалось удалить работу. Попробуйте ещё раз.");
+    } finally { setBusy(false); setProgress(""); }
+  }
 
-  return <Modal wide title={work ? "Редактировать работу" : "Новая работа"} onClose={() => { if (!busy) onClose(); }}>
+  return <>
+    <Modal wide title={work ? "Редактировать работу" : "Новая работа"} onClose={() => { if (!busy) onClose(); }}>
     <form className="editor-form work-editor" onSubmit={submit}>
       <p className="form-intro work-intro">Сначала фотографии и название, затем детали. Незавершённую работу можно сохранить в черновики.</p>
       <div className="work-editor-layout">
@@ -280,10 +293,21 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved }: {
       </div>
       {error && <p className="form-error work-form-error" role="alert">{error}</p>}
       <div className="form-footer work-editor-footer">
+        {work && !confirmDelete && <button type="button" className="work-delete-button" disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={16} />Удалить работу</button>}
         <span>{status === "draft" ? "Сохранится как черновик" : status === "published" ? "Будет показана в каталоге" : "Сохранится в архив"}</span>
         <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Отмена</button>
         <button className="button primary" disabled={busy}>{busy ? <><Loader2 size={16} className="spin" />{progress || "Сохраняем…"}</> : <><Check size={16} />{status === "draft" ? "Сохранить черновик" : "Сохранить работу"}</>}</button>
       </div>
     </form>
-  </Modal>;
+    </Modal>
+    {confirmDelete && work && <Modal title="Удалить работу?" onClose={() => { if (!busy) setConfirmDelete(false); }}>
+      <div className="delete-dialog-body" role="alert">
+        <p>Работу «{work.title}», её фотографии и связанные фигурки нельзя будет восстановить.</p>
+        <div className="delete-dialog-actions">
+          <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>Отмена</button>
+          <button type="button" className="button danger" disabled={busy} onClick={() => void remove()}><Trash2 size={16} />Удалить навсегда</button>
+        </div>
+      </div>
+    </Modal>}
+  </>;
 }
