@@ -193,12 +193,16 @@ export default function Catalog() {
   useEffect(() => {
     if (!selected || selected.photos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight")
+      if (e.key === "ArrowRight") {
+        setSelectedVariantId(null);
         setPhotoIndex((i) => (i + 1) % selected.photos.length);
-      if (e.key === "ArrowLeft")
+      }
+      if (e.key === "ArrowLeft") {
+        setSelectedVariantId(null);
         setPhotoIndex(
           (i) => (i + selected.photos.length - 1) % selected.photos.length,
         );
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -267,6 +271,17 @@ export default function Catalog() {
     setSelected(w);
     setPhotoIndex(0);
     setSelectedVariantId(null);
+  }
+  function selectCatalogPhoto(index: number) {
+    setSelectedVariantId(null);
+    setPhotoIndex(index);
+  }
+  function moveCatalogPhoto(direction: 1 | -1) {
+    if (!selected) return;
+    setSelectedVariantId(null);
+    setPhotoIndex((index) =>
+      (index + selected.photos.length + direction) % selected.photos.length,
+    );
   }
   function saved(w: Work) {
     setWorks((list) => [w, ...list.filter((x) => x.id !== w.id)]);
@@ -406,22 +421,24 @@ export default function Catalog() {
         </div>
         <div className="toolbar" data-reveal>
           <div className="category-controls">
-            <div className="category-tabs">
-              <button
-                className={!category ? "chosen" : ""}
-                onClick={() => setCategory("")}
-              >
-                Все работы
-              </button>
-              {categories.map((c) => (
+            <div className="catalog-filter-group">
+              <div className="category-tabs" aria-label="Фильтр по категориям">
                 <button
-                  key={c}
-                  className={category === c ? "chosen" : ""}
-                  onClick={() => setCategory(c)}
+                  className={!category ? "chosen" : ""}
+                  onClick={() => setCategory("")}
                 >
-                  {c}
+                  Все работы
                 </button>
-              ))}
+                {categories.map((c) => (
+                  <button
+                    key={c}
+                    className={category === c ? "chosen" : ""}
+                    onClick={() => setCategory(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
             {canEdit && (
               <button className="context-action" onClick={() => setSettingsSection("categories")}>
@@ -431,26 +448,28 @@ export default function Catalog() {
           </div>
           {canEdit && (
             <div className="catalog-admin-toolbar">
-            <div className="scope-tabs">
-              {[
-                ["published", "В каталоге"],
-                ["draft", "Черновики"],
-                ["archived", "Архив и проданные"],
-                ["all", "Все"],
-              ].map(([k, v]) => (
-                <button
-                  key={k}
-                  className={scope === k ? "chosen" : ""}
-                  onClick={() => setScope(k)}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-            <button className="button primary" onClick={() => setEditing(null)}>
-              <Plus size={18} />
-              Добавить работу
-            </button>
+              <div className="admin-scope-panel">
+                <div className="scope-tabs" aria-label="Статус работ">
+                  {[
+                    ["published", "В каталоге"],
+                    ["draft", "Черновики"],
+                    ["archived", "Архив и проданные"],
+                    ["all", "Все"],
+                  ].map(([k, v]) => (
+                    <button
+                      key={k}
+                      className={scope === k ? "chosen" : ""}
+                      onClick={() => setScope(k)}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button className="button primary" onClick={() => setEditing(null)}>
+                <Plus size={18} />
+                Добавить работу
+              </button>
             </div>
           )}
           <div className="search-sort">
@@ -712,22 +731,14 @@ export default function Catalog() {
                   <>
                     <button
                       className="gallery-arrow prev"
-                      onClick={() =>
-                        setPhotoIndex(
-                          (i) =>
-                            (i + selected.photos.length - 1) %
-                            selected.photos.length,
-                        )
-                      }
+                      onClick={() => moveCatalogPhoto(-1)}
                       aria-label="Предыдущее фото"
                     >
                       <ArrowLeft size={20} />
                     </button>
                     <button
                       className="gallery-arrow next"
-                      onClick={() =>
-                        setPhotoIndex((i) => (i + 1) % selected.photos.length)
-                      }
+                      onClick={() => moveCatalogPhoto(1)}
                       aria-label="Следующее фото"
                     >
                       <ArrowRight size={20} />
@@ -745,7 +756,7 @@ export default function Catalog() {
                     <button
                       key={p.url + i}
                       className={photoIndex === i ? "selected" : ""}
-                      onClick={() => setPhotoIndex(i)}
+                      onClick={() => selectCatalogPhoto(i)}
                       aria-label={"Фото " + (i + 1)}
                     >
                       <img src={imageUrl(p.url)} alt="" />
