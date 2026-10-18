@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, St
 import type { Photo, Variant, Work } from "../lib/model";
 import { deleteWork, renewUploadedPhoto, saveWork, uploadPhoto } from "./catalog";
 import { WorkSaveSession } from "./work-save";
-import { Modal, compressPhoto, imageUrl } from "./EditorUI";
+import { Modal, UnsavedChangesDialog, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
 
 function EditableChoice({ label, value, options, onChange, disabled, required = false, maxLength }: {
@@ -85,6 +85,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [draggedPhoto, setDraggedPhoto] = useState<string | null>(null);
   const pending = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
@@ -93,10 +94,30 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const uploadInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const chosenPhoto = photos.find((photo) => photo.url === activePhoto) || photos[0];
+  const formSnapshot = JSON.stringify({
+    title, description, category, material, dimensions, price,
+    availability, status, featured, photos, variants,
+  });
+  const [initialFormSnapshot] = useState(() => formSnapshot);
+  const dirty = formSnapshot !== initialFormSnapshot;
+  useEffect(() => {
+    if (!dirty && !busy) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirty, busy]);
   useEffect(() => {
     const staged = pending.current;
     return () => { for (const url of staged.keys()) URL.revokeObjectURL(url); staged.clear(); };
   }, []);
+  function requestClose() {
+    if (busy || processing.current) return;
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  }
   function desktopDrag() { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; }
   async function addPhotos(files: File[]) {
     if (!files.length || processing.current || busy) return;
@@ -192,7 +213,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   }
 
   return <>
-    <Modal wide title={work ? "Редактировать работу" : "Новая работа"} onClose={() => { if (!busy) onClose(); }}>
+    <Modal wide title={work ? "Редактировать работу" : "Новая работа"} onClose={requestClose}>
     <form className="editor-form work-editor" onSubmit={submit}>
       <p className="form-intro work-intro">Сначала фотографии и название, затем детали. Незавершённую работу можно сохранить в черновики.</p>
       <div className="work-editor-layout">
@@ -299,11 +320,12 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
       <div className="form-footer work-editor-footer">
         {work && !confirmDelete && <button type="button" className="work-delete-button" disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={16} />Удалить работу</button>}
         <span>{status === "draft" ? "Сохранится как черновик" : status === "published" ? "Будет показана в каталоге" : "Сохранится в архив"}</span>
-        <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Отмена</button>
+        <button type="button" className="button secondary" disabled={busy} onClick={requestClose}>Отмена</button>
         <button className="button primary" disabled={busy}>{busy ? <><Loader2 size={16} className="spin" />{progress || "Сохраняем…"}</> : <><Check size={16} />{status === "draft" ? "Сохранить черновик" : "Сохранить работу"}</>}</button>
       </div>
     </form>
     </Modal>
+    {confirmClose && <UnsavedChangesDialog onContinue={() => setConfirmClose(false)} onDiscard={onClose} />}
     {confirmDelete && work && <Modal title="Удалить работу?" onClose={() => { if (!busy) setConfirmDelete(false); }}>
       <div className="delete-dialog-body" role="alert">
         <p>Работу «{work.title}», её фотографии и связанные фигурки нельзя будет восстановить.</p>

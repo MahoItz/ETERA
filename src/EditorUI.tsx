@@ -30,6 +30,8 @@ export function Modal({
       ref={ref}
       className={"modal " + (wide ? "wide" : "")}
       onCancel={(e) => {
+        // File inputs also emit cancel when their native picker is dismissed.
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onClose();
       }}
@@ -46,6 +48,36 @@ export function Modal({
       </div>
       {children}
     </dialog>
+  );
+}
+export function UnsavedChangesDialog({
+  onContinue,
+  onDiscard,
+  title = "Закрыть без сохранения?",
+  message = "Есть несохранённые изменения. Если закрыть редактор, изменения полей и фотографий будут потеряны.",
+  discardLabel = "Закрыть без сохранения",
+}: {
+  onContinue: () => void;
+  onDiscard: () => void;
+  title?: string;
+  message?: string;
+  discardLabel?: string;
+}) {
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => keepEditing.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <Modal title={title} onClose={onContinue}>
+      <div className="unsaved-changes-dialog" role="alert">
+        <p>{message}</p>
+        <div className="unsaved-changes-actions">
+          <button ref={keepEditing} type="button" className="button secondary" onClick={onContinue}>Продолжить редактирование</button>
+          <button type="button" className="button danger" onClick={onDiscard}>{discardLabel}</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 export async function compressPhoto(file: File) {

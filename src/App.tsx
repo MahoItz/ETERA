@@ -1,5 +1,5 @@
 import { CatalogImage } from "./CatalogImage";
-import { Modal, imageUrl, compressPhoto } from "./EditorUI";
+import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
 import { PhotoLightbox } from "./PhotoLightbox";
 import { WorkEditor } from "./WorkEditor";
 import { TreeHero } from "./TreeHero";
@@ -934,7 +934,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
   const localUrls = useRef(new Set<string>());
   const fileInput = useRef<HTMLInputElement>(null);
   const formHeading = useRef<HTMLHeadingElement>(null);
-  const keepEditing = useRef<HTMLButtonElement>(null);
   const cancelRemove = useRef<HTMLButtonElement>(null);
   const errorMessage = useRef<HTMLParagraphElement>(null);
   const sorting = useOrnamentSort(ornaments, busy || pendingAction !== null || confirmRemove, async (previous, ordered) => {
@@ -948,9 +947,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
   useEffect(() => () => {
     for (const url of localUrls.current) URL.revokeObjectURL(url);
   }, []);
-  useEffect(() => {
-    if (pendingAction) keepEditing.current?.focus();
-  }, [pendingAction]);
   useEffect(() => {
     if (error) errorMessage.current?.focus();
   }, [error]);
@@ -1073,6 +1069,7 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
   const linkedWork = works.find((w) => w.id === workId);
   const fieldsDisabled = busy || pendingAction !== null || sorting.saving || sorting.draggingId !== null;
   return (
+    <>
     <Modal title="Управление украшениями" onClose={requestClose} wide>
       <div className="tree-manager">
         <p className="form-intro">Выберите украшение для редактирования или добавьте новое. Каждое украшение открывает связанную работу в каталоге.</p>
@@ -1121,16 +1118,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
           </section>
           <form className="editor-form tree-ornament-form" onSubmit={submit} aria-busy={busy}>
             <h3 ref={formHeading} tabIndex={-1}>{editing ? "Редактировать украшение" : "Новое украшение"}</h3>
-            {pendingAction && (
-              <div className="tree-confirm" role="alert">
-                <strong>Есть несохранённые изменения</strong>
-                <p>{pendingAction === "close" ? "Закрыть окно без сохранения?" : pendingAction.item ? "Перейти к другому украшению без сохранения?" : "Начать новое украшение без сохранения текущих изменений?"}</p>
-                <div>
-                  <button ref={keepEditing} type="button" className="button secondary" onClick={() => setPendingAction(null)}>Продолжить редактирование</button>
-                  <button type="button" className="button secondary" onClick={discardChanges}>Не сохранять</button>
-                </div>
-              </div>
-            )}
             {error && <p className="form-error" ref={errorMessage} tabIndex={-1} role="alert">{error}</p>}
             {message && <p className="tree-success" role="status"><Check size={16} />{message}</p>}
             <div className="tree-upload-field">
@@ -1193,6 +1180,20 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
         </div>
       </div>
     </Modal>
+    {pendingAction && <UnsavedChangesDialog
+      onContinue={() => setPendingAction(null)}
+      onDiscard={discardChanges}
+      {...(pendingAction === "close" ? {} : pendingAction.item ? {
+        title: "Перейти без сохранения?",
+        message: "Есть несохранённые изменения. При переходе к другому украшению они будут потеряны.",
+        discardLabel: "Перейти без сохранения",
+      } : {
+        title: "Начать без сохранения?",
+        message: "Есть несохранённые изменения. При добавлении нового украшения текущие изменения будут потеряны.",
+        discardLabel: "Начать без сохранения",
+      })}
+    />}
+    </>
   );
 }
 
