@@ -2,7 +2,7 @@ import { CatalogImage } from "./CatalogImage";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import type { Photo } from "../lib/model";
-import { imageUrl } from "./EditorUI";
+import { imageUrl, usePageScrollLock } from "./EditorUI";
 
 type PhotoLightboxProps = {
   title: string;
@@ -18,15 +18,14 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLig
   const [index, setIndex] = useState(() => Math.max(0, Math.min(initialIndex, photos.length - 1)));
   const photo = photos[index];
 
+  usePageScrollLock();
+
   useEffect(() => {
     const element = dialog.current;
     const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     element?.showModal();
     return () => {
       element?.close();
-      document.body.style.overflow = previousOverflow;
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
         previousFocus.focus({ preventScroll: true });
       }

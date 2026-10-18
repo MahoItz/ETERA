@@ -1,6 +1,52 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+type PageScrollLock = {
+  count: number;
+  x: number;
+  y: number;
+  bodyCssText: string;
+};
+
+let pageScrollLock: PageScrollLock | null = null;
+
+// A fixed body blocks touch scrolling as well as wheel scrolling behind a
+// dialog. Keep this module-wide because dialogs may be nested (for example,
+// the discard-confirmation dialog inside the work editor).
+function lockPageScroll() {
+  if (!pageScrollLock) {
+    pageScrollLock = {
+      count: 0,
+      x: window.scrollX,
+      y: window.scrollY,
+      bodyCssText: document.body.style.cssText,
+    };
+    Object.assign(document.body.style, {
+      position: "fixed",
+      top: `-${pageScrollLock.y}px`,
+      left: `-${pageScrollLock.x}px`,
+      width: "100%",
+      overflow: "hidden",
+    });
+  }
+  pageScrollLock.count += 1;
+  let released = false;
+  return () => {
+    if (released || !pageScrollLock) return;
+    released = true;
+    pageScrollLock.count -= 1;
+    if (pageScrollLock.count > 0) return;
+    const { x, y, bodyCssText } = pageScrollLock;
+    document.body.style.cssText = bodyCssText;
+    pageScrollLock = null;
+    window.scrollTo(x, y);
+  };
+}
+
+export function usePageScrollLock() {
+  useEffect(() => lockPageScroll(), []);
+}
+
 export const imageUrl = (url: string) =>
   /^https?:\/\//.test(url)
     ? url
@@ -20,6 +66,7 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  usePageScrollLock();
   useEffect(() => {
     const d = ref.current;
     d?.showModal();

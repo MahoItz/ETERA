@@ -109,7 +109,8 @@ test('Variant IDs, non-editor fields and variant-level photos survive an update'
   const input = draft(), created = await call(input), variantId = input.variants[0].id;
   await db.query("update public.variants set finish = 'Позолота', weight = '10 г' where id = $1", [variantId]);
   await db.query("insert into public.photos(variant_id, url) values ($1, 'images/variant.jpg')", [variantId]);
-  await call({ ...input, title: 'Изменено' }, { id: created.id, revision: 1 });
+  const updated = await call({ ...input, title: 'Изменено' }, { id: created.id, revision: 1 });
+  assert.deepEqual(updated.variants.map((variant) => variant.id), [variantId]);
   assert.equal((await db.query('select finish from public.variants where id = $1', [variantId])).rows[0].finish, 'Позолота');
   assert.equal((await db.query('select id from public.photos where variant_id = $1', [variantId])).rows.length, 1);
 }));

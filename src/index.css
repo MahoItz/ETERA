@@ -6,11 +6,19 @@
   --accent: #dc755a;
   --peach: #f2b89d;
   --lilac: #d9c4eb;
+  --scrollbar-track: #ead8df;
+  --scrollbar-thumb: #a16e96;
+  --scrollbar-thumb-hover: #7d546e;
   --serif: Georgia, 'Times New Roman', serif;
   --sans: Arial, Helvetica, sans-serif;
   --gutter: clamp(20px, 5.5vw, 96px);
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
+*::-webkit-scrollbar { width: 11px; height: 11px; }
+*::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 999px; }
+*::-webkit-scrollbar-thumb { border: 3px solid var(--scrollbar-track); border-radius: 999px; background: var(--scrollbar-thumb); }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+*::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
 html { scroll-behavior: smooth; scroll-padding-top: 35px; }
 body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 14px; }
 button, input, select, textarea { font: inherit; }
@@ -302,7 +310,7 @@ footer small { display: flex; gap: 6px; align-items: center; }
 .photo-lightbox-prev, .photo-lightbox-next { position: absolute; z-index: 2; top: 50%; transform: translateY(-50%); }
 .photo-lightbox-prev { left: max(20px, env(safe-area-inset-left)); }
 .photo-lightbox-next { right: max(20px, env(safe-area-inset-right)); }
-.photo-lightbox-thumbnails { position: absolute; z-index: 2; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; width: max-content; max-width: calc(100% - 32px); padding: 10px; border: 1px solid #ffffff24; border-radius: 18px; background: #302631bf; backdrop-filter: blur(16px); overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #ac8fa3 transparent; }
+.photo-lightbox-thumbnails { position: absolute; z-index: 2; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; width: max-content; max-width: calc(100% - 32px); padding: 10px; border: 1px solid #ffffff24; border-radius: 18px; background: #302631bf; backdrop-filter: blur(16px); overflow-x: auto; overscroll-behavior: contain; }
 .photo-lightbox-thumbnails button { flex: 0 0 60px; width: 60px; height: 60px; padding: 3px; border: 2px solid transparent; border-radius: 10px; background: transparent; cursor: pointer; opacity: .6; transition: opacity .2s, border-color .2s; }
 .photo-lightbox-thumbnails button:hover { opacity: 1; }
 .photo-lightbox-thumbnails button[aria-pressed="true"] { border-color: #f3cfe8; opacity: 1; }
