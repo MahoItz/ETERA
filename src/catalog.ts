@@ -3,7 +3,7 @@ import { defaults, type Settings, type Variant, type Work } from "../lib/model";
 import { supabase } from "./supabase";
 import type { TreeOrnament } from "./tree-items";
 import { WorkSaveError, type WorkSaveRequest } from "./work-save";
-import { cleanQueuedWorkPhotos, storagePathFromUrl as photoStoragePath, workPhotoIsUsed } from "./work-photo-cleanup";
+import { renewPhotoUpload, storagePathFromUrl as photoStoragePath, uploadProtectedPhoto } from "./work-photo-cleanup";
 
 type WorkRow = Record<string, unknown> & {
   id: string;
@@ -138,6 +138,8 @@ export async function saveWork(request: WorkSaveRequest): Promise<Work> {
       ? "Для сохранения нужно применить обновление базы данных. Ваши изменения остались в редакторе."
       : code === "40001"
         ? "Эту работу уже изменили на другом устройстве. Обновите каталог."
+        : code === "55000"
+          ? "Фотография больше недоступна. Загрузите её заново и повторите сохранение."
         : result.error.message;
     // SQLSTATE errors acknowledge a rollback. A network failure or a broken
     // response does not tell us whether the transaction committed.
@@ -145,20 +147,10 @@ export async function saveWork(request: WorkSaveRequest): Promise<Work> {
   }
   if (!result.data) throw new WorkSaveError("Не получен результат сохранения. Повторите попытку.", false);
   const saved = mapWork(result.data as WorkRow);
-  void cleanQueuedWorkPhotos(supabase).catch((error) => console.warn("Отложенная очистка фотографий:", error));
   return saved;
 }
 
 export async function deleteWork(id: string, revision: number) {
-  // Keep the storage keys before the cascading database delete removes the rows
-  // that describe them.
-  const [photos, ornaments] = await Promise.all([
-    supabase.from("photos").select("url, storage_path").eq("work_id", id),
-    supabase.from("tree_ornaments").select("image_url").eq("work_id", id),
-  ]);
-  fail(photos.error);
-  fail(ornaments.error);
-
   const deleted = await supabase
     .from("works")
     .delete()
@@ -173,42 +165,8 @@ export async function deleteWork(id: string, revision: number) {
     );
   }
 
-  const paths = new Set<string>();
-  for (const photo of photos.data ?? []) {
-    if (photo.storage_path) paths.add(photo.storage_path);
-  }
-  for (const ornament of ornaments.data ?? []) {
-    const path = storagePathFromUrl(ornament.image_url);
-    if (path) paths.add(path);
-  }
-  if (!paths.size) return;
-
-  // URLs can be deliberately reused by another catalogue item, so only remove
-  // files that are no longer referenced anywhere.
-  const urls = [
-    ...(photos.data ?? []).map((photo) => photo.url),
-    ...(ornaments.data ?? []).map((ornament) => ornament.image_url),
-  ];
-  const [usedPhotos, usedOrnaments, usedVariants] = await Promise.all([
-    supabase.from("photos").select("url").in("url", urls),
-    supabase.from("tree_ornaments").select("image_url").in("image_url", urls),
-    supabase.from("variants").select("image_url").in("image_url", urls),
-  ]);
-  if (usedPhotos.error || usedOrnaments.error || usedVariants.error) return;
-  const usedUrls = new Set([
-    ...(usedPhotos.data ?? []).map((photo) => photo.url),
-    ...(usedOrnaments.data ?? []).map((ornament) => ornament.image_url),
-    ...(usedVariants.data ?? []).flatMap((variant) => variant.image_url ? [variant.image_url] : []),
-  ]);
-  const unusedPaths = [...paths].filter((path) => !usedUrls.has(
-    supabase.storage.from("work-photos").getPublicUrl(path).data.publicUrl,
-  ));
-  // The catalogue record has already been deleted successfully. A failed
-  // best-effort storage cleanup must not report that deletion itself failed.
-  if (unusedPaths.length) {
-    const removed = await supabase.storage.from("work-photos").remove(unusedPaths);
-    if (removed.error) console.warn("Не удалось очистить файлы удалённой работы:", removed.error.message);
-  }
+  // Database triggers enqueue every removed reference in this same transaction,
+  // including cascaded variant photos, ornaments and the legacy tree image.
 }
 
 export async function saveTreeOrnament(input: TreeOrnament): Promise<TreeOrnament> {
@@ -246,26 +204,16 @@ export async function saveTreeOrnamentOrder(previous: TreeOrnament[], ordered: T
   return ordered.map((item, position) => ({ ...item, position }));
 }
 
-export async function cleanUnusedTreeImage(url: string) {
-  const path = storagePathFromUrl(url);
-  if (!path) return;
-  if (await workPhotoIsUsed(supabase, url, path)) return;
-  await supabase.storage.from("work-photos").remove([path]);
-}
-
 function storagePathFromUrl(url: string) {
   return photoStoragePath(supabase, url);
 }
 
 export async function uploadPhoto(blob: Blob): Promise<{ url: string }> {
-  const path = `works/${crypto.randomUUID()}.webp`;
-  const upload = await supabase.storage
-    .from("work-photos")
-    .upload(path, blob, { contentType: "image/webp", upsert: false });
-  fail(upload.error);
-  return {
-    url: supabase.storage.from("work-photos").getPublicUrl(path).data.publicUrl,
-  };
+  return uploadProtectedPhoto(supabase, blob);
+}
+
+export async function renewUploadedPhoto(url: string): Promise<boolean> {
+  return renewPhotoUpload(supabase, url);
 }
 
 export type CategoryDraft = { key: string; original: string | null; name: string };

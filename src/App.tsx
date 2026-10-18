@@ -56,10 +56,10 @@ import {
   signIn,
   signOut,
   uploadPhoto,
+  renewUploadedPhoto,
   saveTreeOrnament,
   saveTreeOrnamentOrder,
   deleteTreeOrnament,
-  cleanUnusedTreeImage,
 } from "./catalog";
 const money = (n: number | null) =>
   n === null
@@ -932,7 +932,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
   const newId = useRef(crypto.randomUUID());
   const pending = useRef<{ blob: Blob; uploaded?: string } | null>(null);
   const localUrls = useRef(new Set<string>());
-  const uploadedUrls = useRef(new Set<string>());
   const fileInput = useRef<HTMLInputElement>(null);
   const formHeading = useRef<HTMLHeadingElement>(null);
   const keepEditing = useRef<HTMLButtonElement>(null);
@@ -948,7 +947,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
   const dirty = title !== (editing?.title ?? "") || workId !== (editing?.workId ?? "") || image !== (editing?.imageUrl ?? "");
   useEffect(() => () => {
     for (const url of localUrls.current) URL.revokeObjectURL(url);
-    for (const url of uploadedUrls.current) void cleanUnusedTreeImage(url).catch(() => {});
   }, []);
   useEffect(() => {
     if (pendingAction) keepEditing.current?.focus();
@@ -1032,10 +1030,10 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
     try {
       let imageUrl = image;
       if (pending.current) {
+        if (pending.current.uploaded && !await renewUploadedPhoto(pending.current.uploaded)) pending.current.uploaded = undefined;
         if (!pending.current.uploaded) {
           const result = await uploadPhoto(pending.current.blob);
           pending.current.uploaded = result.url;
-          uploadedUrls.current.add(result.url);
         }
         imageUrl = pending.current.uploaded;
       }
@@ -1043,9 +1041,7 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
         id: editing?.id ?? newId.current, title, imageUrl, workId,
         position: editing?.position ?? Math.max(-1, ...ornaments.map((i) => i.position)) + 1,
       });
-      uploadedUrls.current.delete(imageUrl);
       onSaved(saved);
-      if (editing && editing.imageUrl !== imageUrl) void cleanUnusedTreeImage(editing.imageUrl).catch(() => {});
       choose(null);
       setMessage(editing ? "Изменения сохранены." : "Украшение добавлено. Можно добавить следующее.");
     } catch (e) {
@@ -1065,7 +1061,6 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
       await deleteTreeOrnament(item.id);
       onDeleted(item.id);
       if (editing?.id === item.id) choose(null);
-      void cleanUnusedTreeImage(item.imageUrl).catch(() => {});
       setConfirmRemove(false);
       setMessage("Украшение убрано с ёлки. Работа осталась в каталоге.");
     } catch (e) {

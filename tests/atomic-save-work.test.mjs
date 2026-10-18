@@ -1,9 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
-import { PGlite } from '@electric-sql/pglite';
+import { readFile } from 'node:fs/promises';
+import { createTestDatabase } from './helpers/supabase-test-db.mjs';
 
-const db = new PGlite();
+let db;
 const admin = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const otherAdmin = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const visitor = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -11,7 +11,7 @@ const oldWorkId = '11111111-1111-4111-8111-111111111111';
 const draft = () => ({
   title: 'Транзакционная работа', description: 'Описание', category: 'Тестовая категория', material: 'Гипс',
   dimensions: '', price: null, availability: 'order', status: 'published', featured: false,
-  photos: [{ url: 'images/new.jpg', alt: 'Новое фото', storage_path: 'works/new.webp' }],
+  photos: [{ url: 'images/new.jpg', alt: 'Новое фото', storage_path: null }],
   variants: [{ id: crypto.randomUUID(), name: 'Фигурка', imageUrl: 'images/new.jpg', price: 200, availability: 'order' }],
 });
 const call = async (payload, { requestId = crypto.randomUUID(), id = null, revision = null } = {}) =>
@@ -39,21 +39,7 @@ async function isolated(fn) {
 }
 
 before(async () => {
-  // Supabase supplies these schemas, roles and default grants. Only pgcrypto
-  // extension creation is skipped: gen_random_uuid() is built into PostgreSQL.
-  await db.exec(`create role anon; create role authenticated;
-    create schema auth; create table auth.users(id uuid primary key);
-    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    grant usage on schema auth to anon, authenticated;
-    create schema storage;
-    create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-    create table storage.objects(id uuid primary key, bucket_id text);
-    alter default privileges in schema public grant all on tables to anon, authenticated;`);
-  const migrations = new URL('../supabase/migrations/', import.meta.url);
-  for (const filename of (await readdir(migrations)).filter((name) => name.endsWith('.sql')).sort()) {
-    const sql = (await readFile(new URL(filename, migrations), 'utf8')).replace('create extension if not exists pgcrypto;', '');
-    await db.exec(sql);
-  }
+  db = await createTestDatabase();
   await db.exec(`insert into auth.users values ('${admin}'), ('${otherAdmin}'), ('${visitor}');
     insert into public.profiles(id) values ('${admin}'), ('${otherAdmin}');
     select set_config('request.jwt.claim.sub', '${admin}', false);

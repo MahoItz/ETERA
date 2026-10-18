@@ -2,7 +2,7 @@ import { CatalogImage } from "./CatalogImage";
 import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
-import { deleteWork, saveWork, uploadPhoto } from "./catalog";
+import { deleteWork, renewUploadedPhoto, saveWork, uploadPhoto } from "./catalog";
 import { WorkSaveSession } from "./work-save";
 import { Modal, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
@@ -155,6 +155,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
       for (const photo of photos) {
         const staged = pending.current.get(photo.url);
         if (!staged) { savedPhotos.push(photo); photoUrlMap.set(photo.url, photo.url); continue; }
+        if (staged.uploaded && !await renewUploadedPhoto(staged.uploaded.url)) staged.uploaded = undefined;
         if (!staged.uploaded) {
           setProgress(`Загружаем фото ${savedPhotos.length + 1} из ${photos.length}`);
           const uploaded = await uploadPhoto(staged.blob);
