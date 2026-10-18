@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint src lib --ignore-pattern dist",
+    "test": "node --experimental-strip-types --test tests/catalog.test.ts tests/tree-items.test.ts tests/work-save.test.ts tests/work-photo-cleanup.test.ts tests/atomic-save-work.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "@supabase/supabase-js": "^2.97.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } fr
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
 import { deleteWork, saveWork, uploadPhoto } from "./catalog";
+import { WorkSaveSession } from "./work-save";
 import { Modal, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
 
@@ -87,6 +88,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [dragOver, setDragOver] = useState(false);
   const [draggedPhoto, setDraggedPhoto] = useState<string | null>(null);
   const pending = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
+  const [saveSession] = useState(() => new WorkSaveSession(saveWork, work));
   const processing = useRef(false);
   const uploadInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -168,10 +170,10 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
         position,
       }));
       setProgress("Сохраняем работу");
-      onSaved(await saveWork(work?.id ?? null, {
+      onSaved(await saveSession.save({
         title, description, category, material, dimensions, price: price.trim() ? Number(price) : null,
         availability, status, featured, photos: savedPhotos,
-        variants: savedVariants, revision: work?.revision,
+        variants: savedVariants,
         treeImage: work?.treeImage, showOnTree: work?.showOnTree,
       }));
     } catch (error) { setError(error instanceof Error ? error.message : "Не удалось сохранить работу. Попробуйте ещё раз."); }

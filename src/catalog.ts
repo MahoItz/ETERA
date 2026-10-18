@@ -1,7 +1,9 @@
 import type { Session } from "@supabase/supabase-js";
-import { defaults, type Photo, type Settings, type Variant, type Work } from "../lib/model";
+import { defaults, type Settings, type Variant, type Work } from "../lib/model";
 import { supabase } from "./supabase";
 import type { TreeOrnament } from "./tree-items";
+import { WorkSaveError, type WorkSaveRequest } from "./work-save";
+import { cleanQueuedWorkPhotos, storagePathFromUrl as photoStoragePath, workPhotoIsUsed } from "./work-photo-cleanup";
 
 type WorkRow = Record<string, unknown> & {
   id: string;
@@ -119,102 +121,32 @@ async function categoryId(name: string) {
   return created.data.id;
 }
 
-export async function saveWork(
-  id: string | null,
-  input: Omit<Work, "id" | "revision" | "updatedAt"> & { revision?: number },
-): Promise<Work> {
-  const category_id = await categoryId(input.category);
-  const payload = {
-    title: input.title.trim(),
-    description: input.description.trim(),
-    category_id,
-    material: input.material.trim(),
-    dimensions: input.dimensions.trim(),
-    price: input.price,
-    availability: input.availability,
-    status: input.status,
-    featured: input.featured,
-    published_at:
-      input.status === "published" ? new Date().toISOString() : null,
-  };
-  let workId = id;
-  if (id) {
-    const updated = await supabase
-      .from("works")
-      .update({ ...payload, revision: (input.revision ?? 0) + 1 })
-      .eq("id", id)
-      .eq("revision", input.revision ?? -1)
-      .select("id")
-      .maybeSingle();
-    fail(updated.error);
-    if (!updated.data)
-      throw new Error(
-        "Эту работу уже изменили на другом устройстве. Обновите каталог.",
-      );
-  } else {
-    const created = await supabase
-      .from("works")
-      .insert(payload)
-      .select("id")
-      .single();
-    fail(created.error);
-    if (!created.data) throw new Error("Не удалось создать работу.");
-    workId = created.data.id;
+export async function saveWork(request: WorkSaveRequest): Promise<Work> {
+  const { input } = request;
+  const result = await supabase.rpc("save_work", {
+    request_id: request.requestId,
+    work_id: request.id,
+    expected_revision: request.revision,
+    payload: {
+      ...input,
+      photos: input.photos.map((photo) => ({ ...photo, storage_path: storagePathFromUrl(photo.url) })),
+    },
+  });
+  if (result.error) {
+    const code = result.error.code;
+    const message = code === "PGRST202"
+      ? "Для сохранения нужно применить обновление базы данных. Ваши изменения остались в редакторе."
+      : code === "40001"
+        ? "Эту работу уже изменили на другом устройстве. Обновите каталог."
+        : result.error.message;
+    // SQLSTATE errors acknowledge a rollback. A network failure or a broken
+    // response does not tell us whether the transaction committed.
+    throw new WorkSaveError(message, /^[0-9A-Z]{5}$/.test(code) || code === "PGRST202");
   }
-  const old = await supabase
-    .from("photos")
-    .select("url, storage_path")
-    .eq("work_id", workId!);
-  fail(old.error);
-  const oldPathsByUrl = new Map(
-    (old.data ?? []).map((photo) => [photo.url, photo.storage_path]),
-  );
-  const keptUrls = new Set(input.photos.map((photo) => photo.url));
-  if (input.treeImage) keptUrls.add(input.treeImage);
-  const removedPaths = (old.data ?? []).flatMap((photo) =>
-    photo.storage_path && !keptUrls.has(photo.url) ? [photo.storage_path] : [],
-  );
-  const deleted = await supabase.from("photos").delete().eq("work_id", workId!);
-  fail(deleted.error);
-  if (input.photos.length) {
-    const inserted = await supabase
-      .from("photos")
-      .insert(
-        input.photos.map((photo, position) => ({
-          work_id: workId,
-          url: photo.url,
-          alt: photo.alt.slice(0, 200),
-          position,
-          storage_path:
-            oldPathsByUrl.get(photo.url) ?? storagePathFromUrl(photo.url),
-        })),
-      );
-    fail(inserted.error);
-  }
-  if (removedPaths.length)
-    await supabase.storage.from("work-photos").remove(removedPaths);
-  const removedVariants = await supabase.from("variants").delete().eq("work_id", workId!);
-  fail(removedVariants.error);
-  if (input.variants.length) {
-    const insertedVariants = await supabase.from("variants").insert(
-      input.variants.map((variant, position) => ({
-        work_id: workId,
-        name: variant.name.trim(),
-        image_url: variant.imageUrl,
-        price: variant.price,
-        availability: variant.availability,
-        position,
-      })),
-    );
-    fail(insertedVariants.error);
-  }
-  const fresh = await supabase
-    .from("works")
-    .select("*, category:categories(name), photos(*), variants(*)")
-    .eq("id", workId!)
-    .single();
-  fail(fresh.error);
-  return mapWork(fresh.data as WorkRow);
+  if (!result.data) throw new WorkSaveError("Не получен результат сохранения. Повторите попытку.", false);
+  const saved = mapWork(result.data as WorkRow);
+  void cleanQueuedWorkPhotos(supabase).catch((error) => console.warn("Отложенная очистка фотографий:", error));
+  return saved;
 }
 
 export async function deleteWork(id: string, revision: number) {
@@ -314,24 +246,15 @@ export async function saveTreeOrnamentOrder(previous: TreeOrnament[], ordered: T
   return ordered.map((item, position) => ({ ...item, position }));
 }
 
-// Never remove an image still used by another ornament or a catalogue photo.
 export async function cleanUnusedTreeImage(url: string) {
   const path = storagePathFromUrl(url);
   if (!path) return;
-  const results = await Promise.all([
-    supabase.from("tree_ornaments").select("id").eq("image_url", url).limit(1),
-    supabase.from("photos").select("id").eq("url", url).limit(1),
-  ]);
-  if (results.some((r) => r.error || r.data?.length)) return;
+  if (await workPhotoIsUsed(supabase, url, path)) return;
   await supabase.storage.from("work-photos").remove([path]);
 }
 
 function storagePathFromUrl(url: string) {
-  const marker = "/storage/v1/object/public/work-photos/";
-  const index = url.indexOf(marker);
-  return index === -1
-    ? null
-    : decodeURIComponent(url.slice(index + marker.length));
+  return photoStoragePath(supabase, url);
 }
 
 export async function uploadPhoto(blob: Blob): Promise<{ url: string }> {
