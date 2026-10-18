@@ -1,3 +1,4 @@
+import { CatalogImage } from "./CatalogImage";
 import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
@@ -206,7 +207,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           <input ref={uploadInput} className="visually-hidden" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || photos.length >= 8}
             onChange={(event) => { const files = Array.from(event.target.files || []); event.target.value = ""; void addPhotos(files); }} />
           <div className={`work-photo-stage${dragOver ? " is-drag-over" : ""}${!chosenPhoto ? " is-empty" : ""}`}>
-            {chosenPhoto ? <img src={imageUrl(chosenPhoto.url)} alt={chosenPhoto.alt || title || "Фотография работы"} /> : <div className="work-photo-empty">
+            {chosenPhoto ? <CatalogImage src={imageUrl(chosenPhoto.url)} alt={chosenPhoto.alt || title || "Фотография работы"} /> : <div className="work-photo-empty">
               <span className="work-upload-icon"><ImagePlus size={30} /></span><strong>Покажите работу во всей красе</strong>
               <span>Добавьте до 8 фотографий</span>
               <button type="button" className="button secondary" disabled={busy} onClick={() => uploadInput.current?.click()}><Plus size={16} />Выбрать фотографии</button>
@@ -224,7 +225,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
                 onDragOver={(event) => { if (draggedPhoto && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
                 onDrop={(event) => { if (draggedPhoto && !busy) { event.preventDefault(); event.stopPropagation(); reorderPhoto(draggedPhoto, index); setDraggedPhoto(null); } }}>
                 <button type="button" className="work-photo-select" aria-label={`Посмотреть фото ${index + 1}${index === 0 ? ", обложка" : ""}`} aria-pressed={chosenPhoto?.url === photo.url} onClick={() => setActivePhoto(photo.url)}>
-                  <img draggable={false} src={imageUrl(photo.url)} alt="" /><span className="work-photo-badge">{index === 0 ? "Обложка" : index + 1}</span>
+                  <CatalogImage draggable={false} src={imageUrl(photo.url)} alt="" /><span className="work-photo-badge">{index === 0 ? "Обложка" : index + 1}</span>
                 </button>
                 <button type="button" className="work-photo-remove" disabled={busy} aria-label={`Удалить фото ${index + 1}`} onClick={() => removePhoto(photo.url)}><X size={13} /></button>
               </div>)}
@@ -258,7 +259,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
               </div>
               {!!photos.length && <div className="variant-photo-picker" role="group" aria-label={`Фото фигурки ${index + 1}`}>
                 <span>Фото фигурки</span>
-                <div>{photos.map((photo, photoIndex) => <button type="button" key={photo.url} className={variant.imageUrl === photo.url ? "selected" : ""} aria-label={`Выбрать фото ${photoIndex + 1}`} aria-pressed={variant.imageUrl === photo.url} disabled={busy} onClick={() => updateVariant(variant.id, { imageUrl: photo.url })}><img src={imageUrl(photo.url)} alt="" /><small>{photoIndex + 1}</small></button>)}</div>
+                <div>{photos.map((photo, photoIndex) => <button type="button" key={photo.url} className={variant.imageUrl === photo.url ? "selected" : ""} aria-label={`Выбрать фото ${photoIndex + 1}`} aria-pressed={variant.imageUrl === photo.url} disabled={busy} onClick={() => updateVariant(variant.id, { imageUrl: photo.url })}><CatalogImage src={imageUrl(photo.url)} alt="" /><small>{photoIndex + 1}</small></button>)}</div>
               </div>}
             </div>)}
           </div>

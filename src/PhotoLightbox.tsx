@@ -1,3 +1,4 @@
+import { CatalogImage } from "./CatalogImage";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import type { Photo } from "../lib/model";
@@ -98,7 +99,7 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLig
         onPointerCancel={() => { gesture.current = null; }}
         onLostPointerCapture={() => { gesture.current = null; }}
       >
-        {photo && <img key={photo.url} src={imageUrl(photo.url)} alt={photo.alt || title} draggable={false} />}
+        {photo && <CatalogImage key={photo.url} src={imageUrl(photo.url)} alt={photo.alt || title} draggable={false} />}
       </div>
       {photos.length > 1 && (
         <>
@@ -117,7 +118,7 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLig
                 aria-pressed={photoIndex === index}
                 onClick={() => setIndex(photoIndex)}
               >
-                <img src={imageUrl(item.url)} alt="" draggable={false} />
+                <CatalogImage src={imageUrl(item.url)} alt="" draggable={false} />
               </button>
             ))}
           </div>

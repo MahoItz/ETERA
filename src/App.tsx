@@ -1,3 +1,4 @@
+import { CatalogImage } from "./CatalogImage";
 import { Modal, imageUrl, compressPhoto } from "./EditorUI";
 import { PhotoLightbox } from "./PhotoLightbox";
 import { WorkEditor } from "./WorkEditor";
@@ -564,7 +565,7 @@ export default function Catalog() {
                   aria-label={"Рассмотреть " + w.title}
                 >
                   {w.photos[0] ? (
-                    <img
+                    <CatalogImage
                       src={imageUrl(w.photos[0].url)}
                       alt={w.photos[0].alt || w.title}
                       loading="lazy"
@@ -640,7 +641,7 @@ export default function Catalog() {
           <div className="story-layout">
             <div className="story-picture" data-reveal>
               <div className="story-image-wrap">
-                <img
+                <CatalogImage
                   src={imageUrl("images/Master.webp")}
                   alt="Мастер за работой"
                   loading="lazy"
@@ -735,7 +736,7 @@ export default function Catalog() {
                     onClick={() => setLightboxOpen(true)}
                     aria-label="Открыть фото на весь экран"
                   >
-                    <img
+                    <CatalogImage
                       key={selected.id + "-" + photoIndex + "-" + (selectedVariant?.id ?? "")}
                       src={imageUrl(selectedVariant?.imageUrl ?? selected.photos[photoIndex].url)}
                       alt={selectedVariant?.name || selected.photos[photoIndex].alt || selected.title}
@@ -777,7 +778,7 @@ export default function Catalog() {
                       onClick={() => selectCatalogPhoto(i)}
                       aria-label={"Фото " + (i + 1)}
                     >
-                      <img src={imageUrl(p.url)} alt="" />
+                      <CatalogImage src={imageUrl(p.url)} alt="" />
                     </button>
                   ))}
                 </div>
@@ -810,7 +811,7 @@ export default function Catalog() {
                         className={selectedVariantId === variant.id ? "selected" : ""}
                         onClick={() => setSelectedVariantId(variant.id)}
                       >
-                        {variant.imageUrl ? <img src={imageUrl(variant.imageUrl)} alt="" /> : <ImagePlus size={18} />}
+                        {variant.imageUrl ? <CatalogImage src={imageUrl(variant.imageUrl)} alt="" /> : <ImagePlus size={18} />}
                         <span>{variant.name}</span>
                         <small>{labels[variant.availability]}{variant.price !== null ? ` · ${money(variant.price)}` : ""}</small>
                       </button>
@@ -1110,7 +1111,7 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
                       aria-pressed={editing?.id === item.id} disabled={fieldsDisabled}
                       title={editing?.id === item.id ? "Снять выбор и перейти к добавлению" : "Редактировать украшение"}
                       onClick={() => requestSelect(item)}>
-                      <span className="tree-item-image"><img src={imageUrl(item.imageUrl)} alt="" loading="lazy" draggable={false} /></span>
+                      <span className="tree-item-image"><CatalogImage src={imageUrl(item.imageUrl)} alt="" loading="lazy" draggable={false} /></span>
                       <strong>{item.title}</strong>
                       <span className="tree-item-work" title={work?.title}>{work?.title ?? "Работа недоступна"}</span>
                       <span className={"tree-item-status" + (visible ? " is-visible" : "")}>{visible ? "На ёлке" : eligible ? "В очереди" : "Скрыто"}</span>
@@ -1157,7 +1158,7 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
                   if (e.dataTransfer.files.length !== 1) { setError("Выберите одно изображение украшения."); return; }
                   void prepare(e.dataTransfer.files[0]);
                 }}>
-                <span className="tree-upload-preview">{image ? <img src={imageUrl(image)} alt="Предпросмотр украшения" /> : <ImagePlus size={30} />}</span>
+                <span className="tree-upload-preview">{image ? <CatalogImage src={imageUrl(image)} alt="Предпросмотр украшения" /> : <ImagePlus size={30} />}</span>
                 <span className="tree-upload-copy">
                   <span className="tree-upload-action"><Upload size={16} />{image ? "Заменить файл" : "Выбрать файл"}</span>
                   <span className="tree-upload-filename">{fileName || (image ? "Текущее изображение" : "или перетащите его сюда")}</span>
@@ -1172,7 +1173,7 @@ function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered
               {works.map((work) => <option key={work.id} value={work.id}>{work.title}{work.status !== "published" ? " (не опубликована)" : work.availability === "sold" ? " (продана)" : ""}</option>)}
             </select></label>
             {linkedWork && <div className="tree-link-preview">
-              {linkedWork.photos[0] && <img src={imageUrl(linkedWork.photos[0].url)} alt="" />}
+              {linkedWork.photos[0] && <CatalogImage src={imageUrl(linkedWork.photos[0].url)} alt="" />}
               <span>При нажатии откроется:<strong>{linkedWork.title}</strong></span>
             </div>}
             {linkedWork && (linkedWork.status !== "published" || linkedWork.availability === "sold") && <p className="hint tree-visibility-note">Украшение скрыто, пока связанная работа не опубликована или отмечена как проданная.</p>}
