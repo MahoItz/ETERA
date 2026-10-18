@@ -80,6 +80,7 @@
 .work-form-error { margin: 0 27px 20px; white-space: pre-line; }
 .delete-dialog-body { padding: 24px 27px 27px; }
 .delete-dialog-body p { margin: 0; color: #743735; font-size: 14px; line-height: 1.6; }
+.delete-dialog-body .delete-dialog-error { margin-top: 16px; font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; }
 .delete-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .danger { background: #9d4c49; color: #fff8f3; }
 .danger:hover:not(:disabled) { background: #823936; }

@@ -85,6 +85,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [draggedPhoto, setDraggedPhoto] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [saveSession] = useState(() => new WorkSaveSession(saveWork, work));
   const processing = useRef(false);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const deleteErrorMessage = useRef<HTMLParagraphElement>(null);
   const dragDepth = useRef(0);
   const chosenPhoto = photos.find((photo) => photo.url === activePhoto) || photos[0];
   const formSnapshot = JSON.stringify({
@@ -100,6 +102,9 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   });
   const [initialFormSnapshot] = useState(() => formSnapshot);
   const dirty = formSnapshot !== initialFormSnapshot;
+  useEffect(() => {
+    if (deleteError) deleteErrorMessage.current?.focus();
+  }, [deleteError]);
   useEffect(() => {
     if (!dirty && !busy) return;
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -203,12 +208,12 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   }
   async function remove() {
     if (!work || busy) return;
-    setBusy(true); setError(""); setProgress("Удаляем работу");
+    setBusy(true); setDeleteError(""); setProgress("Удаляем работу");
     try {
       await deleteWork(work.id, work.revision);
       await onDeleted(work);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Не удалось удалить работу. Попробуйте ещё раз.");
+      setDeleteError(error instanceof Error ? `Не удалось удалить работу. ${error.message}` : "Не удалось удалить работу. Попробуйте ещё раз.");
     } finally { setBusy(false); setProgress(""); }
   }
 
@@ -318,7 +323,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
       </div>
       {error && <p className="form-error work-form-error" role="alert">{error}</p>}
       <div className="form-footer work-editor-footer">
-        {work && !confirmDelete && <button type="button" className="work-delete-button" disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={16} />Удалить работу</button>}
+        {work && !confirmDelete && <button type="button" className="work-delete-button" disabled={busy} onClick={() => { setDeleteError(""); setConfirmDelete(true); }}><Trash2 size={16} />Удалить работу</button>}
         <span>{status === "draft" ? "Сохранится как черновик" : status === "published" ? "Будет показана в каталоге" : "Сохранится в архив"}</span>
         <button type="button" className="button secondary" disabled={busy} onClick={requestClose}>Отмена</button>
         <button className="button primary" disabled={busy}>{busy ? <><Loader2 size={16} className="spin" />{progress || "Сохраняем…"}</> : <><Check size={16} />{status === "draft" ? "Сохранить черновик" : "Сохранить работу"}</>}</button>
@@ -327,8 +332,9 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
     </Modal>
     {confirmClose && <UnsavedChangesDialog onContinue={() => setConfirmClose(false)} onDiscard={onClose} />}
     {confirmDelete && work && <Modal title="Удалить работу?" onClose={() => { if (!busy) setConfirmDelete(false); }}>
-      <div className="delete-dialog-body" role="alert">
+      <div className="delete-dialog-body">
         <p>Работу «{work.title}», её фотографии и связанные фигурки нельзя будет восстановить.</p>
+        {deleteError && <p ref={deleteErrorMessage} tabIndex={-1} className="form-error delete-dialog-error" role="alert">{deleteError}</p>}
         <div className="delete-dialog-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>Отмена</button>
           <button type="button" className="button danger" disabled={busy} onClick={() => void remove()}><Trash2 size={16} />Удалить навсегда</button>
