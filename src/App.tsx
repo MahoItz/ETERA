@@ -1246,13 +1246,19 @@ function SettingsEditor({
     setBusy(true);
     setError("");
     try {
-      onSaved(
-        section === "categories" ? { ...settings, categories: await saveCategories(finalCategories) } : await saveSettings({
+      let savedSettings: Settings;
+      if (section === "categories") {
+        const saved = await saveCategories(finalCategories, settings.categoryRevision);
+        savedSettings = { ...settings, categories: saved.names, categoryRevision: saved.revision };
+      } else {
+        savedSettings = await saveSettings({
           name,
           contact,
           categories: settings.categories,
-        }),
-      );
+          categoryRevision: settings.categoryRevision,
+        });
+      }
+      onSaved(savedSettings);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка сохранения");
     } finally {

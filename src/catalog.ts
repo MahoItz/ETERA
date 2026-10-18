@@ -72,7 +72,7 @@ export async function loadCatalog(): Promise<{
   settings: Settings;
   initialized: boolean;
 }> {
-  const [worksResult, settingsResult, categoriesResult, ornamentsResult] = await Promise.all([
+  const [worksResult, settingsResult, categoriesResult, categoryStateResult, ornamentsResult] = await Promise.all([
     supabase
       .from("works")
       .select("*, category:categories(name), photos(*), variants(*)")
@@ -84,11 +84,13 @@ export async function loadCatalog(): Promise<{
       .eq("id", true)
       .maybeSingle(),
     supabase.from("categories").select("name").order("position").order("name"),
+    supabase.from("category_list_state").select("revision").eq("id", true).single(),
     supabase.from("tree_ornaments").select("*").order("position").order("created_at"),
   ]);
   fail(worksResult.error);
   fail(settingsResult.error);
   fail(categoriesResult.error);
+  fail(categoryStateResult.error);
   fail(ornamentsResult.error);
   return {
     works: ((worksResult.data ?? []) as WorkRow[]).map(mapWork),
@@ -97,6 +99,7 @@ export async function loadCatalog(): Promise<{
       name: settingsResult.data?.name ?? defaults.name,
       contact: settingsResult.data?.contact ?? "",
       categories: (categoriesResult.data ?? []).map((c) => c.name),
+      categoryRevision: categoryStateResult.data?.revision ?? defaults.categoryRevision,
     },
     initialized: true,
   };
@@ -218,34 +221,25 @@ export async function renewUploadedPhoto(url: string): Promise<boolean> {
 
 export type CategoryDraft = { key: string; original: string | null; name: string };
 
-export async function saveCategories(categories: CategoryDraft[]): Promise<string[]> {
+export async function saveCategories(categories: CategoryDraft[], expectedRevision: number): Promise<{ names: string[]; revision: number }> {
   const names = categories.map((category) => category.name.trim());
   if (names.some((name) => !name || name.length > 80)) throw new Error("Название категории должно содержать от 1 до 80 символов.");
   if (new Set(names.map((name) => name.toLocaleLowerCase())).size !== names.length) throw new Error("Названия категорий не должны повторяться.");
-  const existing = await supabase.from("categories").select("id, name");
-  fail(existing.error);
-  const rows = existing.data ?? [];
-  // Keep category IDs so renaming also updates the names shown on related works.
-  for (const category of categories) {
-    const row = rows.find((row) => row.name === category.original);
-    const conflict = rows.find((other) => other.name === category.name.trim() && other.id !== row?.id);
-    if (conflict) throw new Error(`Название «${conflict.name}» уже занято. Сначала переименуйте или удалите эту категорию и сохраните изменения.`);
-    if (category.original && !row) throw new Error("Категории изменились. Закройте окно и обновите каталог.");
+  const result = await supabase.rpc("save_categories", {
+    expected_revision: expectedRevision,
+    category_names: names,
+    original_names: categories.map((category) => category.original),
+  });
+  if (result.error?.code === "PGRST202") {
+    throw new Error("Для сохранения категорий нужно применить обновление базы данных.");
   }
-  for (const [position, category] of categories.entries()) {
-    const row = rows.find((row) => row.name === category.original);
-    const payload = { name: names[position], position };
-    const result = row
-      ? await supabase.from("categories").update(payload).eq("id", row.id)
-      : await supabase.from("categories").insert(payload);
-    fail(result.error);
+  if (result.error?.code === "40001") {
+    throw new Error("Список категорий уже изменили на другом устройстве. Закройте окно и обновите каталог.");
   }
-  const removed = rows.filter((row) => !categories.some((category) => category.original === row.name));
-  if (removed.length) {
-    const result = await supabase.from("categories").delete().in("id", removed.map((row) => row.id));
-    fail(result.error);
-  }
-  return names;
+  fail(result.error);
+  const saved = result.data?.[0];
+  if (!saved) throw new Error("Не получен новый список категорий.");
+  return { names: saved.names, revision: saved.revision };
 }
 
 export async function saveSettings(input: Settings): Promise<Settings> {
@@ -262,6 +256,7 @@ export async function saveSettings(input: Settings): Promise<Settings> {
     name: input.name.trim(),
     contact: input.contact.trim(),
     categories: names,
+    categoryRevision: input.categoryRevision,
   };
 }
 
