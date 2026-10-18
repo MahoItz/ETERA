@@ -66,6 +66,13 @@ const money = (n: number | null) =>
     ? "Цена по запросу"
     : new Intl.NumberFormat("ru-RU").format(n) + " ₽";
 const labels = { available: "В наличии", order: "Под заказ", sold: "Продано" };
+type CatalogHistoryState = { catalogRoute?: true; entry?: boolean; dialogDepth?: number };
+
+function catalogLocation() {
+  const url = new URL(window.location.href);
+  const workId = url.searchParams.get("work");
+  return { workId, variantId: workId ? url.searchParams.get("variant") : null };
+}
 function tilt(e: ReactPointerEvent<HTMLElement>) {
   if (
     e.currentTarget.closest(".motion-paused") ||
@@ -177,6 +184,26 @@ export default function Catalog() {
     load();
   }, []);
   useEffect(() => {
+    if (loading) return;
+    const applyLocation = () => {
+      const { workId, variantId } = catalogLocation();
+      const work = works.find((item) => (item.slug === workId || item.id === workId)
+        && (canEdit || (item.status === "published" && item.availability !== "sold"))) ?? null;
+      setLightboxOpen(false);
+      setSelected(work);
+      setPhotoIndex(0);
+      setSelectedVariantId(work?.variants.find((variant) => variant.slug === variantId || variant.id === variantId)?.id ?? null);
+    };
+    const current = history.state as CatalogHistoryState | null;
+    if (!current?.catalogRoute) {
+      const { workId, variantId } = catalogLocation();
+      history.replaceState({ catalogRoute: true, entry: true, dialogDepth: variantId ? 2 : workId ? 1 : 0 }, "", window.location.href);
+    }
+    applyLocation();
+    window.addEventListener("popstate", applyLocation);
+    return () => window.removeEventListener("popstate", applyLocation);
+  }, [loading, works, canEdit]);
+  useEffect(() => {
     const closeMenu = (event: PointerEvent) => {
       const menu = accountMenu.current;
       if (menu && event.target instanceof Node && !menu.contains(event.target)) {
@@ -198,11 +225,11 @@ export default function Catalog() {
     if (!selected || lightboxOpen || selected.photos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") {
-        setSelectedVariantId(null);
+        selectVariant(null, "replace");
         setPhotoIndex((i) => (i + 1) % selected.photos.length);
       }
       if (e.key === "ArrowLeft") {
-        setSelectedVariantId(null);
+        selectVariant(null, "replace");
         setPhotoIndex(
           (i) => (i + selected.photos.length - 1) % selected.photos.length,
         );
@@ -277,19 +304,51 @@ export default function Catalog() {
       lightboxPhotos.push({ url: variant.imageUrl, alt: variant.name });
     }
   }
+  function updateCatalogUrl(workId: string | null, variantId: string | null, action: "push" | "replace") {
+    const url = new URL(window.location.href);
+    if (workId) url.hash = "";
+    if (workId) url.searchParams.set("work", workId);
+    else url.searchParams.delete("work");
+    if (workId && variantId) url.searchParams.set("variant", variantId);
+    else url.searchParams.delete("variant");
+    const current = history.state as CatalogHistoryState | null;
+    const state: CatalogHistoryState = {
+      catalogRoute: true,
+      entry: Boolean(current?.catalogRoute && current.entry && (action === "replace" || current.dialogDepth)),
+      dialogDepth: variantId ? 2 : workId ? 1 : 0,
+    };
+    if (action === "push") history.pushState(state, "", `${url.pathname}${url.search}${url.hash}`);
+    else history.replaceState(state, "", `${url.pathname}${url.search}${url.hash}`);
+  }
   function open(w: Work) {
     setLightboxOpen(false);
     setSelected(w);
     setPhotoIndex(0);
     setSelectedVariantId(null);
+    updateCatalogUrl(w.slug ?? w.id, null, "push");
+  }
+  function closeWork() {
+    const current = history.state as CatalogHistoryState | null;
+    if (current?.catalogRoute && !current.entry && current.dialogDepth) {
+      history.go(-current.dialogDepth);
+      return;
+    }
+    setLightboxOpen(false);
+    setSelected(null);
+    setSelectedVariantId(null);
+    updateCatalogUrl(null, null, "replace");
+  }
+  function selectVariant(variantId: string | null, action: "push" | "replace" = "push") {
+    setSelectedVariantId(variantId);
+    if (selected) updateCatalogUrl(selected.slug ?? selected.id, selected.variants.find((variant) => variant.id === variantId)?.slug ?? variantId, action);
   }
   function selectCatalogPhoto(index: number) {
-    setSelectedVariantId(null);
+    selectVariant(null, "replace");
     setPhotoIndex(index);
   }
   function moveCatalogPhoto(direction: 1 | -1) {
     if (!selected) return;
-    setSelectedVariantId(null);
+    selectVariant(null, "replace");
     setPhotoIndex((index) =>
       (index + selected.photos.length + direction) % selected.photos.length,
     );
@@ -309,7 +368,7 @@ export default function Catalog() {
   async function removeWork(work: Work) {
     setWorks((items) => items.filter((item) => item.id !== work.id));
     setOrnaments((items) => items.filter((item) => item.workId !== work.id));
-    setSelected((item) => item?.id === work.id ? null : item);
+    if (selected?.id === work.id) closeWork();
     setEditing(undefined);
     setNotice("Работа удалена.");
   }
@@ -320,7 +379,7 @@ export default function Catalog() {
     setEditing(undefined);
     setTreeEditor(false);
     setSettingsSection(null);
-    setSelected(null);
+    closeWork();
     if (accountMenu.current) accountMenu.current.open = false;
   }
   async function logout() {
@@ -331,7 +390,7 @@ export default function Catalog() {
       setAdmin(false);
       setEditingEnabled(true);
       setWorks((items) => visibleWorks(items));
-      setSelected(null);
+      closeWork();
       setEditing(undefined);
       setTreeEditor(false);
       setSettingsSection(null);
@@ -725,7 +784,7 @@ export default function Catalog() {
         </div>
       )}
       {selected && (
-        <Modal title={selected.title} onClose={() => setSelected(null)} wide>
+        <Modal title={selected.title} onClose={closeWork} wide>
           <div className="detail">
             <div className="gallery">
               <div className="gallery-main">
@@ -809,7 +868,7 @@ export default function Catalog() {
                         key={variant.id}
                         type="button"
                         className={selectedVariantId === variant.id ? "selected" : ""}
-                        onClick={() => setSelectedVariantId(variant.id)}
+                        onClick={() => selectVariant(variant.id)}
                       >
                         {variant.imageUrl ? <CatalogImage src={imageUrl(variant.imageUrl)} alt="" /> : <ImagePlus size={18} />}
                         <span>{variant.name}</span>
@@ -856,6 +915,8 @@ export default function Catalog() {
                   onClick={() => {
                     setEditing(selected);
                     setSelected(null);
+                    setSelectedVariantId(null);
+                    updateCatalogUrl(null, null, "replace");
                   }}
                 >
                   Редактировать

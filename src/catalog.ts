@@ -7,6 +7,7 @@ import { renewPhotoUpload, storagePathFromUrl as photoStoragePath, uploadProtect
 
 type WorkRow = Record<string, unknown> & {
   id: string;
+  slug?: string;
   title: string;
   description: string;
   material: string;
@@ -28,6 +29,7 @@ type WorkRow = Record<string, unknown> & {
   }>;
   variants?: Array<{
     id: string;
+    slug?: string;
     name: string;
     image_url?: string | null;
     price: number | null;
@@ -41,7 +43,7 @@ function fail(error: { message: string } | null) {
 }
 function mapWork(row: WorkRow): Work {
   return {
-    id: row.id,
+    id: row.id, slug: row.slug,
     title: row.title,
     description: row.description,
     category: row.category?.name ?? "Без категории",
@@ -58,8 +60,8 @@ function mapWork(row: WorkRow): Work {
       .map(({ url, alt }) => ({ url, alt })),
     variants: (row.variants ?? [])
       .sort((a, b) => a.position - b.position)
-      .map(({ id, name, image_url, price, availability, position }) => ({
-        id, name, imageUrl: image_url?.startsWith("blob:") ? null : image_url ?? null, price: price === null ? null : Number(price), availability, position,
+      .map(({ id, slug, name, image_url, price, availability, position }) => ({
+        id, slug, name, imageUrl: image_url?.startsWith("blob:") ? null : image_url ?? null, price: price === null ? null : Number(price), availability, position,
       })),
     revision: row.revision,
     updatedAt: row.updated_at,
