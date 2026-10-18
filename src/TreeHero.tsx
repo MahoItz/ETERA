@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { ArrowUpRight, Sparkles, Flower2, Heart, Gift } from "lucide-react";
+import { CatalogImage } from "./CatalogImage";
 import { visibleWorks, type Work } from "../lib/model";
 import "./tree-hero.css";
 import { treeItems, type TreeOrnament } from "./tree-items";
@@ -47,6 +48,8 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
   const [angle, setAngle] = useState(0);
   const [reduced, setReduced] = useState(true);
   const [dragging, setDragging] = useState(false);
+  const [heroVisible, setHeroVisible] = useState(false);
+  const hero = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; lastX: number; moved: boolean; workId?: string; pointerId: number } | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -56,7 +59,19 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (reduced || dragging || stopMotion) return;
+    const element = hero.current;
+    if (!element || !("IntersectionObserver" in window)) {
+      setHeroVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => setHeroVisible(entry.isIntersecting), {
+      threshold: 0.05,
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (reduced || dragging || stopMotion || !heroVisible) return;
     let id = 0, last = 0, elapsed = 0;
     const frame = (now: number) => {
       if (last && !document.hidden) {
@@ -71,7 +86,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
     };
     id = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(id);
-  }, [reduced, dragging, stopMotion]);
+  }, [reduced, dragging, stopMotion, heroVisible]);
   const turn = (direction: number) => {
     setAngle((a) => (a + direction * TAU / Math.max(items.length, 6)) % TAU);
   };
@@ -105,7 +120,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
   }
   const count = Math.max(items.length, 5);
   return <>
-    <section className="winter-hero" aria-label="Авторские украшения ручной работы"
+    <section ref={hero} className="winter-hero" aria-label="Авторские украшения ручной работы"
       style={{ "--hero-background": `url("${import.meta.env.BASE_URL}images/hero-background.webp")` } as CSSProperties}>
       <div className="winter-dust" aria-hidden="true">{Array.from({ length: 22 }, (_, i) => <i key={i} style={{ left: `${(i * 43 + 7) % 100}%`, top: `${(i * 31 + 12) % 100}%`, animationDelay: `${i * -.7}s` }} />)}</div>
       <div className="winter-copy">
@@ -162,7 +177,7 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
             const style = { left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -25%) scale(${level.scale * (.83 + (depth + 1) * .12)})`, zIndex: Math.round(20 + depth * 10), opacity: .58 + (depth + 1) * .21 };
             return work ? <button key={work.id} data-work={work.id} className={`tree-toy${work.framed ? " tree-toy-framed" : ""}`} style={style} disabled={!ready} aria-label={`Рассмотреть: ${work.title}`} onClick={(e) => { if (e.detail === 0 && ready) onOpen(work.work); }}>
               <span className="toy-thread" aria-hidden="true" />
-              <img draggable={false} src={assetUrl(work.imageUrl)} alt={work.title} />
+              <CatalogImage draggable={false} src={assetUrl(work.imageUrl)} alt={work.title} />
               <span className="toy-title">{work.title} <ArrowUpRight size={13} /></span>
             </button> : <div key={`bauble-${i}`} className={`tree-bauble bauble-${i % 3}`} style={style} aria-hidden="true"><span className="toy-thread" /><span>✧</span></div>;
           })}

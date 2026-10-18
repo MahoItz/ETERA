@@ -114,8 +114,7 @@ create policy "admins manage work photos" on storage.objects for all to authenti
 insert into public.site_settings (id, name, contact) values (true, 'Etera', '') on conflict (id) do nothing;
 insert into public.categories (name, position) values ('Феи и балерины', 10), ('Барашки', 20), ('Декор для дома', 30) on conflict (name) do nothing;
 
--- The original two works are retained as metadata. Their images stay in the Vite public folder
--- until an authenticated administrator uploads replacements to Supabase Storage.
+-- Seed records point at the managed Storage objects used by the catalogue.
 insert into public.works (id, title, description, category_id, material, availability, status, featured, published_at)
 select '11111111-1111-4111-8111-111111111111', 'Феи-балерины', 'Подвесные фигурки из гипса с ручной росписью. Разные цвета, маленькие детали и праздничное настроение.', c.id, 'Гипс', 'order', 'published', true, now() from public.categories c where c.name = 'Феи и балерины'
 on conflict (id) do nothing;
@@ -123,6 +122,6 @@ insert into public.works (id, title, description, category_id, material, availab
 select '22222222-2222-4222-8222-222222222222', 'Барашки с золотым бантом', 'Декоративные подвески из гипса с ручной росписью. Мягкие оттенки, фактурная шерстка и золотые акценты.', c.id, 'Гипс', 'order', 'published', false, now() from public.categories c where c.name = 'Барашки'
 on conflict (id) do nothing;
 insert into public.photos (work_id, url, alt, position) values
-  ('11111111-1111-4111-8111-111111111111', 'images/fairies.jpg', 'Коллекция расписанных фей-балерин', 0),
-  ('22222222-2222-4222-8222-222222222222', 'images/lambs.jpg', 'Две подвески с белыми барашками и золотыми бантами', 0)
+  ('11111111-1111-4111-8111-111111111111', 'https://bznkcwgklcodoseeqaet.supabase.co/storage/v1/object/public/work-photos/works/99b0f80b-96df-46a6-b409-56108c730596.webp', 'Феи-балерины', 0),
+  ('22222222-2222-4222-8222-222222222222', 'https://bznkcwgklcodoseeqaet.supabase.co/storage/v1/object/public/work-photos/works/397c8d8c-435a-4220-a8b2-2d192dd16973.webp', 'Барашки с золотым бантом', 0)
 on conflict do nothing;

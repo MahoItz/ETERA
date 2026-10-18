@@ -1,17 +1,20 @@
 import { CatalogImage } from "./CatalogImage";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
-import { PhotoLightbox } from "./PhotoLightbox";
-import { WorkEditor } from "./WorkEditor";
 import { TreeHero } from "./TreeHero";
 import { treeItems, type TreeOrnament } from "./tree-items";
 import { useOrnamentSort } from "./useOrnamentSort";
 import {
   useEffect,
+  lazy,
+  Suspense,
   useRef,
   useState,
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+
+const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ default: module.PhotoLightbox })));
+const WorkEditor = lazy(() => import("./WorkEditor").then((module) => ({ default: module.WorkEditor })));
 import {
   ArrowUpRight,
   ArrowLeft,
@@ -844,12 +847,12 @@ export default function Catalog() {
               )}
             </div>
             {lightboxOpen && lightboxPhotos.length > 0 && (
-              <PhotoLightbox
+              <Suspense fallback={null}><PhotoLightbox
                 title={selected.title}
                 photos={lightboxPhotos}
                 initialIndex={Math.max(0, lightboxPhotos.findIndex((photo) => photo.url === (selectedVariant?.imageUrl ?? selected.photos[photoIndex]?.url)))}
                 onClose={() => setLightboxOpen(false)}
-              />
+              /></Suspense>
             )}
             <div className="detail-copy">
               <div className="eyebrow">{selected.category}</div>
@@ -927,14 +930,14 @@ export default function Catalog() {
         </Modal>
       )}
       {canEdit && editing !== undefined && (
-        <WorkEditor
+        <Suspense fallback={null}><WorkEditor
           work={editing}
           categories={categories}
           materials={[...new Set(works.map((item) => item.material).filter(Boolean))]}
           onClose={() => setEditing(undefined)}
           onSaved={saved}
           onDeleted={removeWork}
-        />
+        /></Suspense>
       )}
       {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments}
         onClose={() => setTreeEditor(false)}
