@@ -3,15 +3,15 @@ import { ArrowDownUp, ArrowLeftRight, MoveUpRight, X } from "lucide-react";
 import { changeSizeUnit, displaySize, sizeAxes, unitLabel, type SizeDraft } from "../lib/measurements";
 import "./dimensions.css";
 
-export function DimensionsEditor({ value, onChange, suggestions, onDelete, disabled, label = "Размеры фигурки", inherited }: {
+export function DimensionsEditor({ value, onChange, suggestions, onDelete, disabled, label = "Размеры фигурки" }: {
   value: SizeDraft; onChange: (value: SizeDraft) => void; suggestions: number[];
-  onDelete: (mm: number) => Promise<void>; disabled: boolean; label?: string; inherited?: SizeDraft;
+  onDelete: (mm: number) => Promise<void>; disabled: boolean; label?: string;
 }) {
   const [unitError, setUnitError] = useState("");
   return <fieldset className="dimensions-editor" disabled={disabled}>
     <legend>{label}</legend>
     <div className="size-unit-row">
-      <span>{inherited ? "Пустое поле — размер работы" : "Укажите известные размеры"}</span>
+      <span>Укажите известные размеры</span>
       <div className="size-unit-switch" role="group" aria-label={`Единицы: ${label}`}>
         {(["cm", "mm"] as const).map((unit) => <button type="button" key={unit} aria-pressed={value.unit === unit}
           onClick={() => {
@@ -23,7 +23,7 @@ export function DimensionsEditor({ value, onChange, suggestions, onDelete, disab
     <div className="size-input-grid">
       {sizeAxes.map(({ key, label: axisLabel }, index) => <SizeInput key={key}
         label={axisLabel} scope={label} value={value[key]} unit={value.unit} suggestions={suggestions}
-        placeholder={inherited?.[key]} onChange={(number) => { onChange({ ...value, [key]: number }); setUnitError(""); }}
+        onChange={(number) => { onChange({ ...value, [key]: number }); setUnitError(""); }}
         onDelete={onDelete} icon={index} />)}
     </div>
     {unitError && <p className="form-error" role="alert">{unitError}</p>}

@@ -1,6 +1,6 @@
 import { CatalogImage } from "./CatalogImage";
 import { SizeDiagram } from "./SizeDiagram";
-import { resolveMeasurements } from "../lib/measurements";
+import { variantPhotos } from "../lib/variant-gallery";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
 import { TreeHero } from "./TreeHero";
 import { treeItems, type TreeOrnament } from "./tree-items";
@@ -49,6 +49,7 @@ import {
 import {
   defaults,
   filterWorks,
+  catalogPrice,
   visibleWorks,
   type Work,
   type Settings,
@@ -77,6 +78,10 @@ const money = (n: number | null) =>
     ? "Цена по запросу"
     : new Intl.NumberFormat("ru-RU").format(n) + " ₽";
 const labels = { available: "В наличии", order: "Под заказ", sold: "Продано" };
+const catalogMoney = (work: Work) => {
+  const price = catalogPrice(work);
+  return (work.variants.length && !work.soldAsSet && price !== null ? "от " : "") + money(price);
+};
 type CatalogHistoryState = { catalogRoute?: true; version?: 2; dialogDepth?: number };
 
 function catalogLocation() {
@@ -162,6 +167,12 @@ export default function Catalog() {
     [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
+  const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const collectionOverview = Boolean(selected?.variants.length && !selected.soldAsSet && !selectedVariant);
+  const selectedMeasurements = selectedVariant ? selectedVariant.measurements ?? null : collectionOverview ? null : selected?.measurements;
+  const selectedPhotos = selectedVariant ? variantPhotos(selectedVariant) : selected?.photos ?? [];
+  const lightboxPhotos = selectedPhotos;
+  const selectedPrice = selectedVariant ? selectedVariant.price : selected?.price ?? null;
   const canEdit = admin && editingEnabled;
   async function load() {
     setError("");
@@ -252,22 +263,20 @@ export default function Catalog() {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
-    if (!selected || lightboxOpen || selected.photos.length < 2) return;
+    if (lightboxOpen || selectedPhotos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") {
-        selectVariant(null, "replace");
-        setPhotoIndex((i) => (i + 1) % selected.photos.length);
+        setPhotoIndex((i) => (i + 1) % selectedPhotos.length);
       }
       if (e.key === "ArrowLeft") {
-        selectVariant(null, "replace");
         setPhotoIndex(
-          (i) => (i + selected.photos.length - 1) % selected.photos.length,
+          (i) => (i + selectedPhotos.length - 1) % selectedPhotos.length,
         );
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selected, lightboxOpen]);
+  }, [selectedPhotos.length, lightboxOpen]);
   useEffect(() => {
     if (
       motionPaused ||
@@ -327,14 +336,6 @@ export default function Catalog() {
       )
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
-  const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
-  const selectedMeasurements = resolveMeasurements(selectedVariant?.measurements, selected?.measurements);
-  const lightboxPhotos = [...(selected?.photos ?? [])];
-  for (const variant of selected?.variants ?? []) {
-    if (variant.imageUrl && !lightboxPhotos.some((photo) => photo.url === variant.imageUrl)) {
-      lightboxPhotos.push({ url: variant.imageUrl, alt: variant.name });
-    }
-  }
   function updateCatalogUrl(workId: string | null, variantId: string | null, action: "push" | "replace") {
     const url = new URL(window.location.href);
     if (workId) url.hash = "";
@@ -374,18 +375,18 @@ export default function Catalog() {
     updateCatalogUrl(null, null, "replace");
   }
   function selectVariant(variantId: string | null, action: "push" | "replace" = "push") {
+    setPhotoIndex(0);
+    setLightboxOpen(false);
     setSelectedVariantId(variantId);
     if (selected) updateCatalogUrl(selected.slug ?? selected.id, selected.variants.find((variant) => variant.id === variantId)?.slug ?? variantId, action);
   }
   function selectCatalogPhoto(index: number) {
-    selectVariant(null, "replace");
     setPhotoIndex(index);
   }
   function moveCatalogPhoto(direction: 1 | -1) {
-    if (!selected) return;
-    selectVariant(null, "replace");
+    if (!selectedPhotos.length) return;
     setPhotoIndex((index) =>
-      (index + selected.photos.length + direction) % selected.photos.length,
+      (index + selectedPhotos.length + direction) % selectedPhotos.length,
     );
   }
   function saved(w: Work) {
@@ -748,7 +749,7 @@ export default function Catalog() {
                     </button>
                   </h3>
                   <div className="card-bottom">
-                    <span className={"card-price" + (w.price === null ? " on-request" : "")}>{money(w.price)}</span>
+                    <span className={"card-price" + (catalogPrice(w) === null ? " on-request" : "")}>{catalogMoney(w)}</span>
                     {!canEdit && (
                       <button
                         type="button"
@@ -891,7 +892,7 @@ export default function Catalog() {
           <div className="detail">
             <div className="gallery">
               <div className="gallery-main">
-                {selected.photos[photoIndex] ? (
+                {selectedPhotos[photoIndex] ? (
                   <button
                     type="button"
                     className="gallery-expand"
@@ -900,15 +901,15 @@ export default function Catalog() {
                   >
                     <CatalogImage
                       key={selected.id + "-" + photoIndex + "-" + (selectedVariant?.id ?? "")}
-                      src={imageUrl(selectedVariant?.imageUrl ?? selected.photos[photoIndex].url)}
-                      alt={selectedVariant?.name || selected.photos[photoIndex].alt || selected.title}
+                      src={imageUrl(selectedPhotos[photoIndex].url)}
+                      alt={selectedPhotos[photoIndex].alt || selectedVariant?.name || selected.title}
                     />
                     <span className="gallery-expand-hint" aria-hidden="true"><Maximize2 size={18} /></span>
                   </button>
                 ) : (
-                  <ImagePlus />
+                  <div className="photo-placeholder"><ImagePlus /><span>Фотографии пока не добавлены</span></div>
                 )}
-                {selected.photos.length > 1 && (
+                {selectedPhotos.length > 1 && (
                   <>
                     <button
                       className="gallery-arrow prev"
@@ -926,14 +927,13 @@ export default function Catalog() {
                     </button>
                   </>
                 )}
-                <span className="gallery-count">
-                  {selected.photos.length ? photoIndex + 1 : 0} /{" "}
-                  {selected.photos.length}
-                </span>
+                {selectedPhotos.length > 0 && <span className="gallery-count">
+                  {photoIndex + 1} / {selectedPhotos.length}
+                </span>}
               </div>
-              {selected.photos.length > 1 && (
+              {selectedPhotos.length > 1 && (
                 <div className="thumbnails">
-                  {selected.photos.map((p, i) => (
+                  {selectedPhotos.map((p, i) => (
                     <button
                       key={p.url + i}
                       className={photoIndex === i ? "selected" : ""}
@@ -948,34 +948,41 @@ export default function Catalog() {
             </div>
             {lightboxOpen && lightboxPhotos.length > 0 && (
               <Suspense fallback={null}><PhotoLightbox
-                title={selected.title}
+                title={selectedVariant?.name ?? selected.title}
                 photos={lightboxPhotos}
-                initialIndex={Math.max(0, lightboxPhotos.findIndex((photo) => photo.url === (selectedVariant?.imageUrl ?? selected.photos[photoIndex]?.url)))}
+                initialIndex={photoIndex}
                 onClose={() => setLightboxOpen(false)}
               /></Suspense>
             )}
             <div className="detail-copy">
-              <div className="eyebrow">{selected.category}</div>
-              <h2>{selected.title}</h2>
-              <span className="availability">
+              <div className="eyebrow">{selectedVariant ? selected.title : selected.category}</div>
+              <h2>{selectedVariant?.name ?? selected.title}</h2>
+              {!collectionOverview && <span className="availability">
                 <span />
                 {labels[selectedVariant?.availability ?? selected.availability]}
-              </span>
-              <p>{selected.description}</p>
+              </span>}
+              <p>{selectedVariant?.description || selected.description}</p>
               {selected.variants.length > 0 && (
                 <section className="variant-picker" aria-label="Выбор фигурки">
                   <h3>Выберите фигурку</h3>
                   <div className="variant-options">
+                    <button type="button" className={!selectedVariant ? "selected" : ""} aria-pressed={!selectedVariant}
+                      onClick={() => selectVariant(null)}>
+                      {selected.photos[0] ? <CatalogImage src={imageUrl(selected.photos[0].url)} alt="" /> : <ImagePlus size={18} />}
+                      <span>{selected.title}</span>
+                      <small>{selected.soldAsSet ? money(selected.price) : "Фигурки по отдельности"}</small>
+                    </button>
                     {selected.variants.map((variant) => (
                       <button
                         key={variant.id}
                         type="button"
                         className={selectedVariantId === variant.id ? "selected" : ""}
+                        aria-pressed={selectedVariantId === variant.id}
                         onClick={() => selectVariant(variant.id)}
                       >
                         {variant.imageUrl ? <CatalogImage src={imageUrl(variant.imageUrl)} alt="" /> : <ImagePlus size={18} />}
                         <span>{variant.name}</span>
-                        <small>{labels[variant.availability]}{variant.price !== null ? ` · ${money(variant.price)}` : ""}</small>
+                        <small>{labels[variant.availability]} · {money(variant.price)}</small>
                       </button>
                     ))}
                   </div>
@@ -989,7 +996,7 @@ export default function Catalog() {
                     <dd>{selected.material}</dd>
                   </>
                 )}
-                {!selectedMeasurements && selected.dimensions && (
+                {!selectedVariant && !collectionOverview && !selectedMeasurements && selected.dimensions && (
                   <>
                     <dt>Размеры</dt>
                     <dd>{selected.dimensions}</dd>
@@ -998,7 +1005,8 @@ export default function Catalog() {
                 <dt>Исполнение</dt>
                 <dd>Ручная работа</dd>
               </dl>
-              <strong className="price">{money(selectedVariant?.price ?? selected.price)}</strong>
+              {collectionOverview ? <p className="collection-selection-hint">Выберите фигурку, чтобы увидеть её фотографии, цену и размеры.</p>
+                : <strong className="price">{money(selectedPrice)}{selectedVariant && <small> за штуку</small>}</strong>}
               {!canEdit && (
                 <div className="favorite-detail-group">
                   <button
@@ -1087,7 +1095,7 @@ export default function Catalog() {
                 {publicWorks.filter((work) => favoriteIds.has(work.id)).map((work) => (
                   <article key={work.id}>
                     {work.photos[0] && <CatalogImage src={imageUrl(work.photos[0].url)} alt="" />}
-                    <div><strong>{work.title}</strong><span>{money(work.price)}</span></div>
+                    <div><strong>{work.title}</strong><span>{catalogMoney(work)}</span></div>
                     <button type="button" onClick={() => { setAccountOpen(false); open(work); }}>Открыть</button>
                   </article>
                 ))}

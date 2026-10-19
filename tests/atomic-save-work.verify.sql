@@ -66,7 +66,9 @@ begin
     end;
     if (select revision from public.works where id = target_id) <> 1
       or (select jsonb_agg(to_jsonb(p) order by position) from public.photos p where p.work_id = target_id) <> previous_photos
-      or (select jsonb_agg(to_jsonb(v) order by position) from public.variants v where v.work_id = target_id) <> previous_variants
+      or (select jsonb_agg(to_jsonb(v) || jsonb_build_object('photos',
+        (select coalesce(jsonb_agg(to_jsonb(vp) order by vp.position), '[]') from public.photos vp where vp.variant_id = v.id))
+        order by v.position) from public.variants v where v.work_id = target_id) <> previous_variants
       or exists (select 1 from public.work_save_requests where request_id = failed_request)
       or exists (select 1 from public.work_photo_cleanup where url = 'images/atomic-test.jpg') then
       raise exception 'Child failure did not roll back the whole save';

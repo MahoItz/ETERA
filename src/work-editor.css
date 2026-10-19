@@ -1,5 +1,8 @@
 .editor-form.work-editor { padding: 0; }
 .work-intro { padding: 0 27px; margin: 20px 0; }
+.work-main-heading { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; padding: 0 27px; margin: 0 0 18px; }
+.work-main-heading h3 { font-size: 22px; margin: 0; }
+.work-main-heading span { color: var(--muted); font-size: 11px; }
 .work-editor-layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr); gap: 28px; padding: 0 27px 24px; align-items: start; }
 .work-media-column, .work-photo-panel, .work-details-panel { min-width: 0; }
 .work-media-column { display: grid; gap: 18px; }
@@ -60,11 +63,30 @@
 .work-featured > span { flex: 1; }
 .work-featured > svg { color: #926080; }
 .variant-add { padding: 8px 11px; font-size: 10px; }
-.variant-section { border: 1px solid #d5b8c2; border-radius: 18px; background: #f8ece5; padding: 16px; }
+.variant-section { margin: 4px 27px 24px; border: 1px solid #d5b8c2; border-radius: 18px; background: #f3e5e8; padding: 18px; }
 .variant-section .work-section-heading { align-items: flex-start; }
 .variant-section .work-section-heading > div > span { display: block; margin-top: 3px; color: #805469; font-size: 10px; }
 .variant-list { display: grid; gap: 12px; }
-.variant-editor { padding: 14px; border: 1px solid #d9c0cd; border-radius: 13px; background: #fff8f3; }
+.variant-editor { min-width: 0; border: 1px solid #d9c0cd; border-radius: 13px; background: #fff8f3; }
+.variant-editor-summary { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 12px; list-style: none; cursor: pointer; }
+.variant-editor-summary::-webkit-details-marker { display: none; }
+.variant-editor-summary > img, .variant-summary-empty { flex: 0 0 48px; width: 48px; height: 48px; object-fit: cover; border-radius: 9px; background: #ead3da; }
+.variant-summary-empty { display: grid; place-items: center; color: #875b79; }
+.variant-editor-summary > span:not(.variant-summary-empty) { min-width: 0; flex: 1; }
+.variant-editor-summary strong { display: block; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.variant-editor-summary small { display: block; font-size: 11px; margin-top: 6px; color: var(--muted); }
+.variant-editor-summary > svg { flex-shrink: 0; transition: transform .2s; }
+.variant-editor[open] > summary > svg { transform: rotate(180deg); }
+.variant-editor-summary:focus-visible { outline: 2px solid #926080; outline-offset: -3px; border-radius: 13px; }
+.variant-editor-body { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 20px; padding: 0 14px 18px; }
+.variant-editor-body .work-photo-panel { padding: 12px; align-self: start; }
+.compact-gallery .work-photo-stage { aspect-ratio: 4 / 3; max-height: 260px; }
+.compact-gallery .work-section-heading h3 { font-size: 14px; overflow-wrap: anywhere; }
+.compact-gallery .work-photo-empty { padding: 18px 10px; gap: 8px; }
+.compact-gallery .work-photo-empty strong { font-size: 13px; }
+.variant-details { min-width: 0; }
+.variant-details > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; margin-bottom: 16px; }
+.variant-details .work-delete-button { margin: 0; }
 .variant-editor-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: #70445f; }
 .variant-editor-heading .icon-button { width: 28px; height: 28px; }
 .variant-editor > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; margin-bottom: 13px; }
@@ -92,8 +114,10 @@
 @media (max-width: 760px) {
   .work-editor-layout { grid-template-columns: 1fr; gap: 24px; padding: 0 18px 20px; }
   .work-intro { padding: 0 18px; }
+  .work-main-heading { padding: 0 18px; }
   .work-photo-panel { padding: 14px; }
-  .variant-section { padding: 14px; }
+  .variant-section { padding: 12px; margin: 4px 18px 20px; }
+  .variant-editor-body { grid-template-columns: minmax(0, 1fr); padding: 0 10px 14px; gap: 18px; }
   .work-photo-stage { aspect-ratio: 4 / 3; max-height: 360px; }
   .work-photo-empty { gap: 8px; }
   .work-upload-icon { width: 46px; height: 46px; }

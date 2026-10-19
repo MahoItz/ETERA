@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { changeSizeUnit, measurementsFromDraft, parseSize, resolveMeasurements, sizeDraft, sizeSummary } from "../lib/measurements.ts";
+import { changeSizeUnit, measurementsFromDraft, parseSize, sizeDraft, sizeSummary } from "../lib/measurements.ts";
 
 test("commas, dots and conversion preserve physical dimensions and optional axes", () => {
   const draft = { height: "8,75", width: "2.5", depth: "", unit: "cm" as const };
@@ -19,12 +19,9 @@ test("invalid, nonpositive and overly precise input cannot be saved or silently 
   assert.throws(() => changeSizeUnit({ height: "abc", width: "", depth: "", unit: "cm" }, "mm"));
 });
 
-test("variant overrides inherit each omitted axis and use the variant's display unit", () => {
-  const common = { heightMm: 80, widthMm: 55, depthMm: 20, unit: "cm" as const };
+test("only known dimensions are displayed and omitted axes stay empty", () => {
   const own = { heightMm: 100, widthMm: null, depthMm: null, unit: "mm" as const };
-  const resolved = resolveMeasurements(own, common);
-  assert.deepEqual(resolved, { ...common, heightMm: 100, unit: "mm" });
-  assert.equal(sizeSummary(resolved), "высота 100 мм · ширина 55 мм · глубина 20 мм");
-  assert.deepEqual(resolveMeasurements(null, common), common);
-  assert.equal(resolveMeasurements(null, null), null);
+  assert.equal(sizeSummary(own), "высота 100 мм");
+  assert.deepEqual(sizeDraft(own), { height: "100", width: "", depth: "", unit: "mm" });
+  assert.equal(sizeSummary(null), "");
 });

@@ -1,9 +1,12 @@
 import { CatalogImage } from "./CatalogImage";
-import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { Check, ChevronDown, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
+import { MAX_GALLERY_PHOTOS } from "../lib/model";
 import { measurementsFromDraft, sizeDraft, type Measurements, type SizeDraft } from "../lib/measurements";
 import { DimensionsEditor } from "./DimensionsEditor";
+import { PhotoGalleryEditor } from "./PhotoGalleryEditor";
+import { variantPhotos } from "../lib/variant-gallery";
 import { deleteWork, renewUploadedPhoto, saveWork, uploadPhoto, loadDimensionSuggestions, deleteDimensionSuggestion, restoreDimensionSuggestion } from "./catalog";
 import { WorkSaveSession } from "./work-save";
 import { Modal, UnsavedChangesDialog, compressPhoto, imageUrl } from "./EditorUI";
@@ -88,27 +91,23 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [availability, setAvailability] = useState<Work["availability"]>(work?.availability || "order");
   const [status, setStatus] = useState<Work["status"]>(work?.status || "draft");
   const [featured, setFeatured] = useState(work?.featured || false);
+  const [soldAsSet, setSoldAsSet] = useState(work?.soldAsSet ?? false);
   const [photos, setPhotos] = useState<Photo[]>(work?.photos || []);
-  const [variants, setVariants] = useState<Variant[]>(work?.variants || []);
-  const [activePhoto, setActivePhoto] = useState(work?.photos[0]?.url || "");
+  const [variants, setVariants] = useState<Variant[]>(() => (work?.variants ?? []).map(variant => ({ ...variant, photos: variantPhotos(variant) })));
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [draggedPhoto, setDraggedPhoto] = useState<string | null>(null);
   const pending = useRef(new Map<string, { blob: Blob; uploaded?: Photo }>());
   const [saveSession] = useState(() => new WorkSaveSession(saveWork, work));
   const processing = useRef(false);
-  const uploadInput = useRef<HTMLInputElement>(null);
   const deleteErrorMessage = useRef<HTMLParagraphElement>(null);
-  const dragDepth = useRef(0);
-  const chosenPhoto = photos.find((photo) => photo.url === activePhoto) || photos[0];
   const formSnapshot = JSON.stringify({
     title, description, category, material, dimensions, measurements, variantSizes, price,
-    availability, status, featured, photos, variants,
+    availability, status, featured, soldAsSet, photos, variants,
   });
   const [initialFormSnapshot] = useState(() => formSnapshot);
   const dirty = formSnapshot !== initialFormSnapshot;
@@ -161,11 +160,11 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
     if (dirty) setConfirmClose(true);
     else onClose();
   }
-  function desktopDrag() { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; }
-  async function addPhotos(files: File[]) {
+  async function addPhotos(files: File[], variantId?: string) {
     if (!files.length || processing.current || busy) return;
     setError("");
-    if (photos.length + files.length > 8) { setError(`Можно добавить ещё ${8 - photos.length} фото. Всего — не больше 8.`); return; }
+    const gallery = variantId ? variants.find(variant => variant.id === variantId)?.photos ?? [] : photos;
+    if (gallery.length + files.length > MAX_GALLERY_PHOTOS) { setError(`В эту галерею можно добавить ещё ${MAX_GALLERY_PHOTOS - gallery.length} фото. Всего — не больше ${MAX_GALLERY_PHOTOS}.`); return; }
     processing.current = true;
     setBusy(true);
     const failures: string[] = [];
@@ -176,31 +175,36 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           const blob = await compressPhoto(file);
           const url = URL.createObjectURL(blob);
           pending.current.set(url, { blob });
-          setPhotos((items) => [...items, { url, alt: title || file.name }]);
-          setActivePhoto((current) => current || url);
+          const photo = { url, alt: (variantId ? variants.find(variant => variant.id === variantId)?.name : title) || file.name };
+          if (variantId) setVariants(items => items.map(variant => variant.id === variantId ? { ...variant, photos: [...(variant.photos ?? []), photo] } : variant));
+          else setPhotos((items) => [...items, photo]);
         } catch (error) { failures.push(`${file.name}: ${error instanceof Error ? error.message : "Не удалось обработать фото"}`); }
       }
       if (failures.length) setError(failures.join("\n"));
     } finally { processing.current = false; setBusy(false); setProgress(""); }
   }
-  function isFileDrag(event: DragEvent) { return desktopDrag() && event.dataTransfer.types.includes("Files"); }
-  function reorderPhoto(url: string, to: number) {
-    setPhotos((items) => {
+  function reorderPhoto(url: string, to: number, variantId?: string) {
+    const reorder = (items: Photo[]) => {
       const from = items.findIndex((photo) => photo.url === url);
       if (from < 0 || to < 0 || to >= items.length) return items;
       const next = [...items]; next.splice(to, 0, ...next.splice(from, 1)); return next;
-    });
+    };
+    if (variantId) setVariants(items => items.map(variant => variant.id === variantId ? { ...variant, photos: reorder(variant.photos ?? []) } : variant));
+    else setPhotos(reorder);
   }
-  function removePhoto(url: string) {
-    if (pending.current.has(url)) { URL.revokeObjectURL(url); pending.current.delete(url); }
-    setPhotos((items) => items.filter((photo) => photo.url !== url));
-    if (activePhoto === url) setActivePhoto(photos.find((photo) => photo.url !== url)?.url || "");
+  function removePhoto(url: string, variantId?: string) {
+    // Pending URLs may still be referenced by another gallery. Release them on
+    // editor unmount; persisted files are collected by the server after save.
+    if (variantId) setVariants(items => items.map(variant => variant.id === variantId ? { ...variant, photos: (variant.photos ?? []).filter(photo => photo.url !== url) } : variant));
+    else setPhotos((items) => items.filter((photo) => photo.url !== url));
   }
   function addVariant() {
+    const id = crypto.randomUUID();
     setVariants((items) => [...items, {
-      id: crypto.randomUUID(), name: "", imageUrl: photos[0]?.url ?? null,
+      id, name: "", description: "", imageUrl: null, photos: [],
       price: null, availability: "available", position: items.length,
     }]);
+    setExpandedVariants(ids => new Set([...ids, id]));
   }
   function updateVariant(id: string, changes: Partial<Variant>) {
     setVariants((items) => items.map((variant) => variant.id === id ? { ...variant, ...changes } : variant));
@@ -210,8 +214,17 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
     if (busy || processing.current) return;
     if (!title.trim()) { setError("Добавьте название работы."); return; }
     if (!category.trim()) { setError("Выберите или добавьте категорию."); return; }
-    if (variants.some((variant) => !variant.name.trim())) { setError("Добавьте название каждой отдельной фигурке."); return; }
+    if (variants.some((variant) => !variant.name.trim())) {
+      setExpandedVariants(ids => new Set([...ids, ...variants.filter(variant => !variant.name.trim()).map(variant => variant.id)]));
+      setError("Добавьте название каждой отдельной фигурке."); return;
+    }
     if (status === "published" && !photos.length) { setError("Добавьте хотя бы одно фото, чтобы показать работу в каталоге."); return; }
+    if (status === "published" && variants.some(variant => !variant.photos?.length)) {
+      const missing = variants.filter(variant => !variant.photos?.length);
+      setExpandedVariants(ids => new Set([...ids, ...missing.map(variant => variant.id)]));
+      setError(`Добавьте хотя бы одно собственное фото каждой фигурке: ${missing.map(variant => variant.name).join(", ")}.`);
+      return;
+    }
     let savedMeasurements: Measurements | null;
     const savedVariantSizes = new Map<string, Measurements | null>();
     try {
@@ -223,24 +236,27 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
     } catch (error) { setError(error instanceof Error ? error.message : "Проверьте размеры."); return; }
     setBusy(true); setError(""); setProgress("Сохраняем работу");
     try {
-      const savedPhotos: Photo[] = [];
       const photoUrlMap = new Map<string, string>();
-      for (const photo of photos) {
+      const allPhotos = [...photos, ...variants.flatMap(variant => variant.photos ?? [])];
+      for (const photo of allPhotos) {
+        if (photoUrlMap.has(photo.url)) continue;
         const staged = pending.current.get(photo.url);
-        if (!staged) { savedPhotos.push(photo); photoUrlMap.set(photo.url, photo.url); continue; }
+        if (!staged) { photoUrlMap.set(photo.url, photo.url); continue; }
         if (staged.uploaded && !await renewUploadedPhoto(staged.uploaded.url)) staged.uploaded = undefined;
         if (!staged.uploaded) {
-          setProgress(`Загружаем фото ${savedPhotos.length + 1} из ${photos.length}`);
+          setProgress(`Загружаем фото ${photoUrlMap.size + 1} из ${new Set(allPhotos.map(photo => photo.url)).size}`);
           const uploaded = await uploadPhoto(staged.blob);
           staged.uploaded = { url: uploaded.url, alt: photo.alt };
         }
-        savedPhotos.push(staged.uploaded);
         photoUrlMap.set(photo.url, staged.uploaded.url);
       }
+      const resolvedPhotos = (gallery: Photo[]) => gallery.map(photo => ({ ...photo, url: photoUrlMap.get(photo.url) ?? photo.url }));
+      const savedPhotos = resolvedPhotos(photos);
       const savedVariants = variants.map((variant, position) => ({
         ...variant,
         name: variant.name.trim(),
-        imageUrl: variant.imageUrl ? photoUrlMap.get(variant.imageUrl) ?? savedPhotos[0]?.url ?? null : null,
+        imageUrl: variant.photos?.[0] ? photoUrlMap.get(variant.photos[0].url) ?? variant.photos[0].url : null,
+        photos: resolvedPhotos(variant.photos ?? []),
         position,
         measurements: savedVariantSizes.get(variant.id) ?? null,
       }));
@@ -248,7 +264,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
       onSaved(await saveSession.save({
         title, description, category, material, dimensions: savedMeasurements ? "" : dimensions,
         measurements: savedMeasurements, price: price.trim() ? Number(price) : null,
-        availability, status, featured, photos: savedPhotos,
+        availability: variants.length && !soldAsSet ? "available" : availability, status, featured, soldAsSet, photos: savedPhotos,
         variants: savedVariants,
         treeImage: work?.treeImage, showOnTree: work?.showOnTree,
       }));
@@ -269,85 +285,13 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   return <>
     <Modal wide title={work ? "Редактировать работу" : "Новая работа"} onClose={requestClose}>
     <form className="editor-form work-editor" onSubmit={submit}>
-      <p className="form-intro work-intro">Сначала фотографии и название, затем детали. Незавершённую работу можно сохранить в черновики.</p>
+      <p className="form-intro work-intro">Сначала добавьте основную работу и общие фотографии. Ниже можно добавить отдельные фигурки со своими фото и параметрами.</p>
+      <div className="work-main-heading"><h3>Основная работа</h3><span>Общий вид, описание и категория</span></div>
       <div className="work-editor-layout">
         <div className="work-media-column">
-        <section className="work-photo-panel" aria-labelledby="work-photos-title"
-          onDragEnter={(event) => { if (isFileDrag(event)) { event.preventDefault(); dragDepth.current++; if (!busy && photos.length < 8) setDragOver(true); } }}
-          onDragOver={(event) => { if (isFileDrag(event)) { event.preventDefault(); event.dataTransfer.dropEffect = busy || photos.length >= 8 ? "none" : "copy"; } }}
-          onDragLeave={(event) => { if (isFileDrag(event)) { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragOver(false); } }}
-          onDrop={(event) => {
-            if (!isFileDrag(event)) return;
-            event.preventDefault(); dragDepth.current = 0; setDragOver(false);
-            void addPhotos(Array.from(event.dataTransfer.files));
-          }}>
-          <div className="work-section-heading"><h3 id="work-photos-title">Фотографии</h3><span>{photos.length} / 8</span></div>
-          <input ref={uploadInput} className="visually-hidden" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || photos.length >= 8}
-            onChange={(event) => { const files = Array.from(event.target.files || []); event.target.value = ""; void addPhotos(files); }} />
-          <div className={`work-photo-stage${dragOver ? " is-drag-over" : ""}${!chosenPhoto ? " is-empty" : ""}`}>
-            {chosenPhoto ? <CatalogImage src={imageUrl(chosenPhoto.url)} alt={chosenPhoto.alt || title || "Фотография работы"} /> : <div className="work-photo-empty">
-              <span className="work-upload-icon"><ImagePlus size={30} /></span><strong>Покажите работу во всей красе</strong>
-              <span>Добавьте до 8 фотографий</span>
-              <button type="button" className="button secondary" disabled={busy} onClick={() => uploadInput.current?.click()}><Plus size={16} />Выбрать фотографии</button>
-              <span className="desktop-drop-hint">или перетащите их сюда</span>
-            </div>}
-            {dragOver && <div className="work-drop-overlay"><ImagePlus size={32} /><strong>Отпустите, чтобы добавить фото</strong></div>}
-          </div>
-          {!!photos.length && <>
-            <div className="work-photo-strip" aria-label="Добавленные фотографии">
-              {photos.map((photo, index) => <div className={`work-photo-tile${chosenPhoto?.url === photo.url ? " selected" : ""}${draggedPhoto === photo.url ? " dragging" : ""}`} key={photo.url}
-                draggable={!busy} onDragStart={(event) => {
-                  if (!desktopDrag()) { event.preventDefault(); return; }
-                  setDraggedPhoto(photo.url); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", photo.url);
-                }} onDragEnd={() => setDraggedPhoto(null)}
-                onDragOver={(event) => { if (draggedPhoto && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
-                onDrop={(event) => { if (draggedPhoto && !busy) { event.preventDefault(); event.stopPropagation(); reorderPhoto(draggedPhoto, index); setDraggedPhoto(null); } }}>
-                <button type="button" className="work-photo-select" aria-label={`Посмотреть фото ${index + 1}${index === 0 ? ", обложка" : ""}`} aria-pressed={chosenPhoto?.url === photo.url} onClick={() => setActivePhoto(photo.url)}>
-                  <CatalogImage draggable={false} src={imageUrl(photo.url)} alt="" /><span className="work-photo-badge">{index === 0 ? "Обложка" : index + 1}</span>
-                </button>
-                <button type="button" className="work-photo-remove" disabled={busy} aria-label={`Удалить фото ${index + 1}`} onClick={() => removePhoto(photo.url)}><X size={13} /></button>
-              </div>)}
-              {photos.length < 8 && <button type="button" className="work-photo-more" disabled={busy} aria-label="Добавить фотографии" onClick={() => uploadInput.current?.click()}><Plus size={23} /><span>Ещё фото</span></button>}
-            </div>
-            {chosenPhoto && <div className="work-photo-tools">
-              <span>Фото {photos.indexOf(chosenPhoto) + 1} из {photos.length}</span>
-              <div>
-                <button type="button" className="icon-button" disabled={busy || photos.indexOf(chosenPhoto) === 0} aria-label="Переместить фото влево" onClick={() => reorderPhoto(chosenPhoto.url, photos.indexOf(chosenPhoto) - 1)}><ArrowLeft size={16} /></button>
-                <button type="button" className="icon-button" disabled={busy || photos.indexOf(chosenPhoto) === photos.length - 1} aria-label="Переместить фото вправо" onClick={() => reorderPhoto(chosenPhoto.url, photos.indexOf(chosenPhoto) + 1)}><ArrowRight size={16} /></button>
-                <button type="button" className="work-cover-button" disabled={busy || photos[0] === chosenPhoto} onClick={() => reorderPhoto(chosenPhoto.url, 0)}><Star size={14} />{photos[0] === chosenPhoto ? "Обложка" : "На обложку"}</button>
-              </div>
-            </div>}
-          </>}
-          <p className="hint">JPG, PNG или WebP · до 20 МБ за фото. Первое фото станет обложкой.<span className="desktop-drop-hint"> Порядок фото можно менять перетаскиванием.</span></p>
-          {busy && <p className="work-progress" role="status"><Loader2 size={16} className="spin" />{progress}</p>}
-        </section>
-        <section className="variant-section" aria-labelledby="work-variants-title">
-          <div className="work-section-heading">
-            <div><h3 id="work-variants-title">Отдельные фигурки</h3><span>{variants.length ? `${variants.length} добавлено` : "Добавьте фигурки из этой коллекции"}</span></div>
-            <button type="button" className="button secondary variant-add" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить</button>
-          </div>
-          {!photos.length && <p className="hint">Сначала добавьте фотографии работы выше — они появятся здесь для выбора.</p>}
-          <div className="variant-list">
-            {variants.map((variant, index) => <div className="variant-editor" key={variant.id}>
-              <div className="variant-editor-heading"><span>Фигурка {index + 1}</span><button type="button" className="icon-button" disabled={busy} aria-label={`Удалить фигурку ${index + 1}`} onClick={() => setVariants((items) => items.filter((item) => item.id !== variant.id))}><X size={15} /></button></div>
-              <label>Название<input required maxLength={120} value={variant.name} onChange={(event) => updateVariant(variant.id, { name: event.target.value })} placeholder="Например, Фея с золотыми крыльями" disabled={busy} /></label>
-              <div className="variant-fields form-row">
-                <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={(event) => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
-                <label>Доступность<select value={variant.availability} onChange={(event) => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
-              </div>
-              <DimensionsEditor label={`Размеры: ${variant.name || `Фигурка ${index + 1}`}`}
-                value={variantSizes[variant.id] ?? sizeDraft(null)} suggestions={dimensionSuggestions}
-                onChange={(value) => setVariantSizes((sizes) => ({ ...sizes, [variant.id]: value }))}
-                onDelete={removeSuggestion} disabled={busy || historyBusy}
-                inherited={previewMeasurements ? sizeDraft({ ...previewMeasurements, unit: variantSizes[variant.id]?.unit ?? "cm" }) : sizeDraft(null)} />
-              {!!photos.length && <div className="variant-photo-picker" role="group" aria-label={`Фото фигурки ${index + 1}`}>
-                <span>Фото фигурки</span>
-                <div>{photos.map((photo, photoIndex) => <button type="button" key={photo.url} className={variant.imageUrl === photo.url ? "selected" : ""} aria-label={`Выбрать фото ${photoIndex + 1}`} aria-pressed={variant.imageUrl === photo.url} disabled={busy} onClick={() => updateVariant(variant.id, { imageUrl: photo.url })}><CatalogImage src={imageUrl(photo.url)} alt="" /><small>{photoIndex + 1}</small></button>)}</div>
-              </div>}
-            </div>)}
-          </div>
-          <button type="button" className="button secondary variant-add variant-add-bottom" disabled={busy} onClick={addVariant}><Plus size={15} />Добавить ещё фигурку</button>
-        </section>
+        <PhotoGalleryEditor title="Общие фотографии" photos={photos} busy={busy}
+          onAdd={files => addPhotos(files)} onRemove={url => removePhoto(url)} onReorder={(url, to) => reorderPhoto(url, to)} />
+        {busy && <p className="work-progress" role="status"><Loader2 size={16} className="spin" />{progress}</p>}
         </div>
 
         <div className="work-details-panel">
@@ -362,22 +306,26 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           </section>
           <section className="work-form-section" aria-labelledby="work-detail-title">
             <div className="work-section-heading"><h3 id="work-detail-title">Детали и наличие</h3></div>
-            <DimensionsEditor value={measurements} onChange={setMeasurements} suggestions={dimensionSuggestions}
-              onDelete={removeSuggestion} disabled={busy || historyBusy} />
+            {variants.length > 0 && <>
+              <label className="checkbox work-featured"><input type="checkbox" checked={soldAsSet} onChange={event => setSoldAsSet(event.target.checked)} disabled={busy} /><span>Набор продаётся целиком</span></label>
+              <p className="hint">{soldAsSet ? "Здесь укажите цену и размеры всего набора. У фигурок ниже — свои параметры." : "Это общий вид коллекции. Цена, наличие и размеры указываются отдельно у каждой фигурки."}</p>
+            </>}
+            {(!variants.length || soldAsSet) && <DimensionsEditor label={variants.length ? "Размеры всего набора" : "Размеры фигурки"} value={measurements} onChange={setMeasurements} suggestions={dimensionSuggestions}
+              onDelete={removeSuggestion} disabled={busy || historyBusy} />}
             {historyError && <p className="form-error" role="alert">{historyError}</p>}
             {removedSuggestion !== null && <p className="dimension-history-message" role="status">
               Подсказка удалена. Размеры работ не изменились.
               <button type="button" disabled={busy || historyBusy} onClick={() => void undoRemoveSuggestion()}>Вернуть</button>
             </p>}
-            {dimensions && !previewMeasurements && <div className="size-legacy">
+            {dimensions && !previewMeasurements && (!variants.length || soldAsSet) && <div className="size-legacy">
               Прежняя запись: <strong>{dimensions}</strong>. Уточните направления в полях выше, чтобы показать схему.
               <br /><button type="button" disabled={busy} onClick={() => setDimensions("")}>Удалить прежнюю запись</button>
             </div>}
+            {(!variants.length || soldAsSet) && <div className="form-row">
+              <label>{variants.length ? "Цена всего набора, ₽" : "Цена, ₽"}<input type="number" min={0} max={10000000} step="any" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="По запросу" disabled={busy} /></label>
+            </div>}
             <div className="form-row">
-              <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="По запросу" disabled={busy} /></label>
-            </div>
-            <div className="form-row">
-              <label>Доступность<select value={availability} onChange={(event) => setAvailability(event.target.value as Work["availability"])} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
+              {(!variants.length || soldAsSet) && <label>Доступность<select value={availability} onChange={(event) => setAvailability(event.target.value as Work["availability"])} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>}
               <label>Показ в каталоге<select value={status} onChange={(event) => setStatus(event.target.value as Work["status"])} disabled={busy}><option value="draft">Черновик</option><option value="published">В каталоге</option><option value="archived">Архив</option></select></label>
             </div>
             <label className="checkbox work-featured"><input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} disabled={busy} /><span>Закрепить в начале каталога</span><Star size={15} /></label>
@@ -385,6 +333,46 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           </section>
         </div>
       </div>
+      <section className="variant-section" aria-labelledby="work-variants-title">
+        <div className="work-section-heading">
+          <div><h3 id="work-variants-title">Фигурки по отдельности</h3><span>{variants.length ? `${variants.length} добавлено` : "Необязательно: добавьте изделия для выбора поштучно"}</span></div>
+        </div>
+        <div className="variant-list">
+          {variants.map((variant, index) => <details className="variant-editor" key={variant.id} open={expandedVariants.has(variant.id)}
+            onToggle={event => {
+              const open = event.currentTarget.open;
+              setExpandedVariants(ids => {
+                if (ids.has(variant.id) === open) return ids;
+                const next = new Set(ids); if (open) next.add(variant.id); else next.delete(variant.id); return next;
+              });
+            }}>
+            <summary className="variant-editor-summary">
+              {variant.photos?.[0] ? <CatalogImage src={imageUrl(variant.photos[0].url)} alt="" /> : <span className="variant-summary-empty"><Plus size={20} /></span>}
+              <span><strong>{variant.name || `Новая фигурка ${index + 1}`}</strong><small>{variant.price === null ? "Цена по запросу" : `${new Intl.NumberFormat("ru-RU").format(variant.price)} ₽ за штуку`} · {variant.photos?.length ?? 0} фото</small></span>
+              <ChevronDown size={18} />
+            </summary>
+            <div className="variant-editor-body">
+              <PhotoGalleryEditor title={`Фото: ${variant.name || `Фигурка ${index + 1}`}`} photos={variant.photos ?? []} compact busy={busy}
+                onAdd={files => addPhotos(files, variant.id)} onRemove={url => removePhoto(url, variant.id)} onReorder={(url, to) => reorderPhoto(url, to, variant.id)} />
+              <div className="variant-details">
+                <label>Название фигурки *<input maxLength={120} value={variant.name} onChange={event => updateVariant(variant.id, { name: event.target.value })} placeholder="Например, Фея с золотыми крыльями" disabled={busy} /></label>
+                <label>Описание фигурки<textarea rows={2} maxLength={4000} value={variant.description ?? ""} onChange={event => updateVariant(variant.id, { description: event.target.value })} placeholder="Особенности этой фигурки, если нужно" disabled={busy} /></label>
+                <div className="variant-fields form-row">
+                  <label>Цена за штуку, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={event => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
+                  <label>Наличие фигурки<select value={variant.availability} onChange={event => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
+                </div>
+                <DimensionsEditor label={`Размеры: ${variant.name || `Фигурка ${index + 1}`}`}
+                  value={variantSizes[variant.id] ?? sizeDraft(null)} suggestions={dimensionSuggestions}
+                  onChange={value => setVariantSizes(sizes => ({ ...sizes, [variant.id]: value }))}
+                  onDelete={removeSuggestion} disabled={busy || historyBusy} />
+                <p className="hint">Цена, размеры и фотографии относятся только к этой фигурке. Категория и материал — как у основной работы.</p>
+                <button type="button" className="work-delete-button" disabled={busy} onClick={() => setVariants(items => items.filter(item => item.id !== variant.id))}><Trash2 size={15} />Удалить фигурку</button>
+              </div>
+            </div>
+          </details>)}
+        </div>
+        <button type="button" className="button secondary variant-add variant-add-bottom" disabled={busy} onClick={addVariant}><Plus size={16} />Добавить отдельную фигурку</button>
+      </section>
       {error && <p className="form-error work-form-error" role="alert">{error}</p>}
       <div className="form-footer work-editor-footer">
         {work && !confirmDelete && <button type="button" className="work-delete-button" disabled={busy} onClick={() => { setDeleteError(""); setConfirmDelete(true); }}><Trash2 size={16} />Удалить работу</button>}

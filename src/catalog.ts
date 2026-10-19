@@ -14,6 +14,7 @@ type WorkRow = Record<string, unknown> & {
   material: string;
   dimensions: string;
   measurements?: Measurements | null;
+  sold_as_set?: boolean;
   price: number | null;
   availability: Work["availability"];
   status: Work["status"];
@@ -38,6 +39,8 @@ type WorkRow = Record<string, unknown> & {
     availability: Variant["availability"];
     position: number;
     measurements?: Measurements | null;
+    description?: string;
+    photos?: WorkRow["photos"];
   }>;
 };
 
@@ -53,6 +56,7 @@ function mapWork(row: WorkRow): Work {
     material: row.material,
     dimensions: row.dimensions,
     measurements: row.measurements ?? null,
+    soldAsSet: row.sold_as_set ?? false,
     price: row.price === null ? null : Number(row.price),
     availability: row.availability,
     status: row.status,
@@ -64,9 +68,12 @@ function mapWork(row: WorkRow): Work {
       .map(({ url, alt }) => ({ url, alt })),
     variants: (row.variants ?? [])
       .sort((a, b) => a.position - b.position)
-      .map(({ id, slug, name, image_url, price, availability, position, measurements }) => ({
+      .map(({ id, slug, name, image_url, price, availability, position, measurements, description, photos }) => ({
         id, slug, name, imageUrl: image_url?.startsWith("blob:") ? null : image_url ?? null, price: price === null ? null : Number(price), availability, position,
         measurements: measurements ?? null,
+        description: description ?? "",
+        photos: photos ? [...photos].sort((a, b) => a.position - b.position).map(({ url, alt }) => ({ url, alt }))
+          : image_url ? [{ url: image_url, alt: name }] : [],
       })),
     revision: row.revision,
     updatedAt: row.updated_at,
@@ -82,7 +89,7 @@ export async function loadCatalog(): Promise<{
   const [worksResult, settingsResult, categoriesResult, categoryStateResult, ornamentsResult] = await Promise.all([
     supabase
       .from("works")
-      .select("*, category:categories(name), photos(*), variants(*)")
+      .select("*, category:categories(name), photos(*), variants(*, photos(*))")
       .order("featured", { ascending: false })
       .order("updated_at", { ascending: false }),
     supabase
@@ -139,7 +146,11 @@ export async function saveWork(request: WorkSaveRequest): Promise<Work> {
     expected_revision: request.revision,
     payload: {
       ...input,
+      soldAsSet: input.soldAsSet,
       photos: input.photos.map((photo) => ({ ...photo, storage_path: storagePathFromUrl(photo.url) })),
+      variants: input.variants.map((variant) => ({ ...variant,
+        photos: variant.photos?.map((photo) => ({ ...photo, storage_path: storagePathFromUrl(photo.url) })),
+      })),
     },
   });
   if (result.error) {

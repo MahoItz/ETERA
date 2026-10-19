@@ -367,6 +367,9 @@ footer small { display: flex; gap: 6px; align-items: center; }
 dt { color: var(--muted); }
 dd { margin: 0; }
 .price { font-size: 23px; display: block; font-family: var(--serif); font-weight: 400; margin-bottom: 22px; }
+.price small { font-size: 12px; font-family: var(--sans); color: var(--muted); }
+.collection-selection-hint { padding: 12px 14px; border: 1px solid #dcc2cd; border-radius: 12px; background: #fff8f366; }
+.gallery-main .photo-placeholder { gap: 12px; align-content: center; padding: 20px; font-size: 12px; text-align: center; }
 .detail-copy > .button { margin: 0 7px 10px 0; }
 .editor-form { padding: 24px 27px; }
 .editor-form > label, .form-row > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; margin-bottom: 20px; }

@@ -54,16 +54,6 @@ export function changeSizeUnit(value: SizeDraft, unit: SizeUnit): SizeDraft {
   return measurements ? sizeDraft({ ...measurements, unit }) : { ...value, unit };
 }
 
-export function resolveMeasurements(own?: Measurements | null, fallback?: Measurements | null): Measurements | null {
-  if (!own) return fallback ?? null;
-  return {
-    heightMm: own.heightMm ?? fallback?.heightMm ?? null,
-    widthMm: own.widthMm ?? fallback?.widthMm ?? null,
-    depthMm: own.depthMm ?? fallback?.depthMm ?? null,
-    unit: own.unit,
-  };
-}
-
 export function sizeSummary(value?: Measurements | null): string {
   if (!value) return "";
   return sizeAxes.filter(({ field }) => value[field] !== null)
