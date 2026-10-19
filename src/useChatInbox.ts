@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CHAT_REFRESH, loadChatInbox, refreshChat, type ChatInboxData, type ChatThread } from "./chat";
+import { CHAT_REFRESH, loadChatInbox, loadVisibleChatIds, refreshChat, type ChatInboxData, type ChatThread } from "./chat";
 import { supabase } from "./supabase";
 
 const empty: ChatInboxData = { threads: [], unread_count: 0, has_more: false };
@@ -9,22 +9,32 @@ const mergeThreads = (current: ChatThread[], added: ChatThread[]) =>
 export function useChatInbox(userId: string | null) {
   const [state, setState] = useState({ ...empty, owner: userId, loading: Boolean(userId), error: "", loadingMore: false });
   const moreRequest = useRef<AbortController | null>(null);
+  const knownIds = useRef<string[]>([]);
+  const deletedIds = useRef(new Set<string>());
+  knownIds.current = state.owner === userId ? state.threads.map(thread => thread.id) : [];
   useEffect(() => {
+    deletedIds.current.clear();
     setState({ ...empty, owner: userId, loading: Boolean(userId), error: "", loadingMore: false });
     if (!userId) return;
     let controller: AbortController | undefined;
     let stopped = false;
     const update = async (event?: Event) => {
       if (event instanceof CustomEvent && event.detail?.userId === userId) {
-        setState(previous => ({ ...previous, threads: previous.threads.map(thread => thread.id === event.detail.conversationId ? { ...thread, unread_count: 0 } : thread) }));
+        if (event.detail.deletedId) {
+          const id = event.detail.deletedId as string;
+          deletedIds.current.add(id); moreRequest.current?.abort();
+          setState(previous => ({ ...previous, loadingMore: false, threads: previous.threads.filter(thread => thread.id !== id), unread_count: Math.max(0, previous.unread_count - (previous.threads.find(thread => thread.id === id)?.unread_count ?? 0)) }));
+        } else setState(previous => ({ ...previous, threads: previous.threads.map(thread => thread.id === event.detail.conversationId ? { ...thread, unread_count: 0 } : thread) }));
       }
       if (document.hidden) return;
       controller?.abort();
       controller = new AbortController();
       const signal = controller.signal;
       try {
-        const result = await loadChatInbox(signal);
-        if (!stopped && !signal.aborted) setState(previous => ({ ...previous, ...result, has_more: previous.threads.length > 50 ? previous.has_more : result.has_more, owner: userId, threads: mergeThreads(previous.threads, result.threads), loading: false, error: "" }));
+        const checked = new Set(knownIds.current);
+        const [result, visible] = await Promise.all([loadChatInbox(signal), loadVisibleChatIds([...checked], signal)]);
+        if (!stopped && !signal.aborted) setState(previous => ({ ...previous, ...result, has_more: previous.threads.length > 50 ? previous.has_more : result.has_more, owner: userId,
+          threads: mergeThreads(previous.threads.filter(thread => !checked.has(thread.id) || visible.has(thread.id)), result.threads).filter(thread => !deletedIds.current.has(thread.id)), loading: false, error: "" }));
       } catch (error) {
         if (!stopped && !signal.aborted) setState(previous => ({ ...previous, loading: false, error: error instanceof Error ? error.message : "Не удалось загрузить сообщения." }));
       }
@@ -51,7 +61,7 @@ export function useChatInbox(userId: string | null) {
     setState(previous => ({ ...previous, loadingMore: true }));
     try {
       const result = await loadChatInbox(controller.signal, state.threads.at(-1));
-      if (!controller.signal.aborted) setState(previous => ({ ...previous, threads: mergeThreads(previous.threads, result.threads), has_more: result.has_more, unread_count: result.unread_count, error: "" }));
+      if (!controller.signal.aborted) setState(previous => ({ ...previous, threads: mergeThreads(previous.threads, result.threads).filter(thread => !deletedIds.current.has(thread.id)), has_more: result.has_more, unread_count: result.unread_count, error: "" }));
     } catch (error) {
       if (!controller.signal.aborted) setState(previous => ({ ...previous, error: error instanceof Error ? error.message : "Не удалось загрузить сообщения." }));
     } finally {

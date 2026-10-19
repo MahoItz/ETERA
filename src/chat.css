@@ -47,9 +47,21 @@
 .chat-inbox-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .chat-inbox-layout { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.4fr); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: #fff8f35c; }
 .chat-thread-list { min-width: 0; max-height: 760px; overflow-y: auto; border-right: 1px solid var(--line); }
-.chat-thread-list > button { display: grid; gap: 8px; width: 100%; padding: 18px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; }
-.chat-thread-list > button:hover { background: #f0dfe5; }
-.chat-thread-list > button[aria-pressed="true"] { background: #e5d5e9; }
+.chat-thread-row { position: relative; border-bottom: 1px solid var(--line); }
+.chat-thread-select { display: grid; gap: 8px; width: 100%; padding: 18px 54px 18px 18px; border: 0; background: transparent; text-align: left; }
+.chat-thread-select:hover { background: #f0dfe5; }
+.chat-thread-select[aria-pressed="true"] { background: #e5d5e9; }
+.chat-thread-list > .chat-load-older { width: 100%; }
+.chat-delete-icon { position: absolute; top: 8px; right: 6px; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: #8f444e; }
+.chat-delete-icon:hover, .chat-delete-action:hover { background: #f2d9d8; }
+.chat-delete-action { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; flex-shrink: 0; padding: 9px; border: 1px solid #d6adb2; border-radius: 10px; background: transparent; color: #8f444e; font-size: 11px; }
+.chat-thread-heading { display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; }
+.chat-thread-heading h3 { min-width: 0; }
+.chat-delete-confirmation { padding: 24px; }
+.chat-delete-confirmation > p:first-child { line-height: 1.8; font-size: 13px; overflow-wrap: anywhere; }
+.chat-delete-confirmation .button.danger { background: #8f444e; color: #fff8f3; }
+.chat-delete-confirmation .button.danger:hover { background: #78313c; }
+@media (max-width: 450px) { .chat-thread-heading { flex-wrap: wrap; } .chat-delete-confirmation { padding: 18px; } }
 .chat-thread-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .chat-thread-title .chat-count { flex-shrink: 0; }
 .chat-thread-person { font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }

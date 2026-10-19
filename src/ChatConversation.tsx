@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
-import { loadChatMessages, markChatRead, mergeMessages, notifyChatRead, refreshChat, sendChatMessage, type ChatMessage } from "./chat";
+import { ChatDeletedError, loadChatMessages, markChatRead, mergeMessages, notifyChatRead, refreshChat, sendChatMessage, type ChatMessage } from "./chat";
 import { supabase } from "./supabase";
 
-export function ChatConversation({ conversationId, workId, userId, admin = false, onLogin, blocked = false }: {
-  conversationId?: string; workId?: string; userId: string | null; admin?: boolean; onLogin?: () => void; blocked?: boolean;
+export function ChatConversation({ conversationId, workId, userId, admin = false, onLogin, blocked = false, onConversationCreated }: {
+  conversationId?: string; workId?: string; userId: string | null; admin?: boolean; onLogin?: () => void; blocked?: boolean; onConversationCreated?: (id: string) => void;
 }) {
   const [createdId, setCreatedId] = useState<string>();
   const id = conversationId ?? createdId;
@@ -20,6 +20,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const [visible, setVisible] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const root = useRef<HTMLDivElement>(null);
@@ -47,13 +48,13 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
 
   useEffect(() => {
     setMessages([]); latest.current = 0; acknowledged.current = 0; acknowledgementScope.current = `${userId}:${id}`;
-    setHasOlder(false); setLoadingOlder(false); setHistoryError(""); setReadError(false); setAtBottom(true);
+    setHasOlder(false); setLoadingOlder(false); setHistoryError(""); setReadError(false); setAtBottom(true); setDeleted(false);
     if (!id || !userId) { setLoading(false); return; }
     setLoading(true);
     let stopped = false, running = false;
     const controller = new AbortController();
     const update = async () => {
-      if (running || document.hidden) return;
+      if (stopped || running || document.hidden) return;
       running = true;
       try {
         let batch: ChatMessage[];
@@ -69,7 +70,10 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
         } while (batch.length === 50);
         setHistoryError("");
       } catch (error) {
-        if (!stopped) setHistoryError(error instanceof Error ? error.message : "Не удалось загрузить переписку.");
+        if (!stopped) {
+          if (error instanceof ChatDeletedError) { setMessages([]); setDeleted(true); setLoading(false); setHistoryError(""); stopped = true; }
+          else setHistoryError(error instanceof Error ? error.message : "Не удалось загрузить переписку.");
+        }
       } finally { running = false; if (!stopped) setLoading(false); }
     };
     void update();
@@ -113,7 +117,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (!draft.trim() || pending.current || blocked) return;
+    if (!draft.trim() || pending.current || blocked || deleted) return;
     if (!userId) { onLogin?.(); return; }
     const body = draft.trim();
     if (!request.current || request.current.body !== body) request.current = { id: crypto.randomUUID(), body };
@@ -121,6 +125,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
     try {
       const result = await sendChatMessage(request.current.id, body, id, workId);
       setCreatedId(result.conversation_id); setMessages(previous => mergeMessages(previous, [result.message]));
+      onConversationCreated?.(result.conversation_id);
       setAtBottom(true);
       setDraft(""); request.current = null; setSent(true); refreshChat();
     } catch (error) { setSendError(error instanceof Error ? error.message : "Не удалось отправить сообщение. Текст сохранён."); }
@@ -128,6 +133,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
   }
 
   return <div ref={root} className="chat-conversation">
+    {deleted && <p className="chat-hint" role="status">Эта переписка удалена. Чтобы начать новую, закройте чат и снова нажмите «Написать мастеру» в карточке работы.</p>}
     {loading && <p className="chat-hint" role="status">Загружаем переписку…</p>}
     {historyError && <div className="chat-error"><p role="alert">{historyError}</p><button type="button" onClick={() => setRetry(value => value + 1)}>Повторить загрузку</button></div>}
     {messages.length > 0 && <div ref={log} className="chat-log" role="log" aria-label="Переписка" tabIndex={0} onScroll={() => {
@@ -149,7 +155,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
       {!userId && <p className="chat-hint">Для отправки войдите или зарегистрируйтесь. Набранный текст сохранится.</p>}
       {sendError && <p className="form-error" role="alert">{sendError} Текст сообщения сохранён.</p>}
       {sent && <p className="chat-success" role="status">Сообщение отправлено.</p>}
-      <div className="chat-composer-footer"><small>{draft.length} / 4000</small><button type="submit" className="button primary" disabled={sending || loading || blocked || !draft.trim()}><Send size={15} />{sending ? "Отправляем…" : userId ? "Отправить" : "Войти и отправить"}</button></div>
+      <div className="chat-composer-footer"><small>{draft.length} / 4000</small><button type="submit" className="button primary" disabled={sending || loading || blocked || deleted || !draft.trim()}><Send size={15} />{sending ? "Отправляем…" : userId ? "Отправить" : "Войти и отправить"}</button></div>
     </form>
   </div>;
 }

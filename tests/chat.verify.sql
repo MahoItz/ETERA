@@ -51,6 +51,15 @@ begin
   perform public.chat_mark_read(thread,(reply->'message'->>'seq')::bigint);
   select (value->>'unread_count')::integer into unread from jsonb_array_elements(public.chat_inbox()->'threads') where value->>'id'=thread::text;
   if unread is distinct from 0 then raise exception 'Read receipt failed'; end if;
+  begin
+    perform public.chat_delete(thread,(first->'message'->>'id')::uuid);
+    raise exception 'Stale delete confirmation was accepted';
+  exception when serialization_failure then null;
+  end;
+  perform public.chat_delete(thread,(reply->'message'->>'id')::uuid);
+  perform public.chat_delete(thread,(reply->'message'->>'id')::uuid);
+  if exists(select 1 from public.chat_messages where conversation_id=thread) then raise exception 'Deleted messages remain'; end if;
+  if exists(select 1 from jsonb_array_elements(public.chat_inbox()->'threads') where value->>'id'=thread::text) then raise exception 'Deleted conversation remains in inbox'; end if;
   execute 'reset role';
   execute 'set local role anon';
   begin
@@ -60,5 +69,5 @@ begin
   end;
   execute 'reset role';
 end $$;
-select 'Chat send/reply, retries, isolation and unread receipts verified; all fixtures rolled back' as verification;
+select 'Chat send/reply/delete, confirmation snapshots, retries, isolation and unread receipts verified; all fixtures rolled back' as verification;
 rollback;

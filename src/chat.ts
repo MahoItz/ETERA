@@ -7,6 +7,14 @@ export const CHAT_REFRESH = "etera-chat-refresh";
 export const refreshChat = () => window.dispatchEvent(new Event(CHAT_REFRESH));
 export const notifyChatRead = (conversationId: string, userId: string) =>
   window.dispatchEvent(new CustomEvent(CHAT_REFRESH, { detail: { conversationId, userId } }));
+export const notifyChatDeleted = (conversationId: string, userId: string) =>
+  window.dispatchEvent(new CustomEvent(CHAT_REFRESH, { detail: { deletedId: conversationId, userId } }));
+export class ChatDeletedError extends Error {
+  constructor() { super("Эта переписка удалена."); }
+}
+export class ChatChangedError extends Error {
+  constructor() { super("В чате появилось новое сообщение. Закройте это окно, прочитайте переписку и повторите удаление."); }
+}
 
 function check(error: { code?: string; message: string } | null) {
   if (!error) return;
@@ -31,8 +39,9 @@ export async function findWorkConversation(workId: string, userId: string, signa
 
 export async function loadChatThread(id: string, signal: AbortSignal): Promise<ChatThread> {
   const { data, error } = await supabase.from("chat_conversations").select("*").eq("id", id).abortSignal(signal).single();
+  if (error?.code === "PGRST116") throw new ChatDeletedError();
   check(error);
-  if (!data) throw new Error("Переписка больше недоступна.");
+  if (!data) throw new ChatDeletedError();
   return { ...data, participant_label: "Переписка с мастером", unread_count: 0, last_message: null } as ChatThread;
 }
 
@@ -40,7 +49,12 @@ export async function loadChatMessages(id: string, signal: AbortSignal, options:
   let query = supabase.from("chat_messages").select("id, seq, conversation_id, sender_id, sender_role, body, created_at").eq("conversation_id", id);
   if (options.before !== undefined) query = query.lt("seq", options.before);
   if (options.after !== undefined) query = query.gt("seq", options.after);
-  const { data, error } = await query.order("seq", { ascending: options.after !== undefined }).limit(50).abortSignal(signal);
+  const [{ data, error }, conversation] = await Promise.all([
+    query.order("seq", { ascending: options.after !== undefined }).limit(50).abortSignal(signal),
+    supabase.from("chat_conversations").select("id").eq("id", id).abortSignal(signal).maybeSingle(),
+  ]);
+  check(conversation.error);
+  if (!conversation.data) throw new ChatDeletedError();
   check(error);
   return (data ?? []) as ChatMessage[];
 }
@@ -54,6 +68,26 @@ export async function sendChatMessage(requestId: string, body: string, conversat
 
 export async function markChatRead(id: string, seq: number) {
   const { error } = await supabase.rpc("chat_mark_read", { target_conversation_id: id, through_seq: seq });
+  check(error);
+}
+
+export async function loadVisibleChatIds(ids: string[], signal: AbortSignal): Promise<Set<string>> {
+  const chunks: string[][] = [];
+  for (let start = 0; start < ids.length; start += 100) chunks.push(ids.slice(start, start + 100));
+  const results = await Promise.all(chunks.map(chunk => supabase.from("chat_conversations").select("id").in("id", chunk).abortSignal(signal)));
+  return new Set(results.flatMap(result => { check(result.error); return (result.data ?? []).map(row => row.id as string); }));
+}
+
+export async function loadChatDeleteSnapshot(id: string, signal: AbortSignal): Promise<string | null> {
+  await loadChatThread(id, signal);
+  const { data, error } = await supabase.from("chat_messages").select("id").eq("conversation_id", id).order("seq", { ascending: false }).limit(1).abortSignal(signal).maybeSingle();
+  check(error);
+  return data?.id ?? null;
+}
+
+export async function deleteChat(id: string, expectedLastMessageId: string | null) {
+  const { error } = await supabase.rpc("chat_delete", { target_conversation_id: id, expected_last_message_id: expectedLastMessageId });
+  if (error?.code === "40001") throw new ChatChangedError();
   check(error);
 }
 

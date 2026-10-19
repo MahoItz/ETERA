@@ -11,6 +11,7 @@ const asUser=async id=>{await db.exec('reset role');await db.query("select set_c
 const send=async(body,conversation=null,request=crypto.randomUUID(),workId=work)=>(await db.query('select public.chat_send($1,$2,$3,$4) as data',[request,workId,conversation,body])).rows[0].data;
 const inbox=async(cursor=null)=>(await db.query('select public.chat_inbox($1,$2) as data',[cursor?.updated_at??null,cursor?.id??null])).rows[0].data;
 const read=async(id,seq)=>db.query('select public.chat_mark_read($1,$2)',[id,seq]);
+const remove=async(id,latest)=>db.query('select public.chat_delete($1,$2)',[id,latest]);
 async function isolated(fn){await db.exec('begin');try{await fn();}finally{await db.exec('rollback');}}
 async function denied(fn,code='42501'){await db.exec('savepoint rejected');try{await assert.rejects(fn,e=>e.code===code);}finally{await db.exec('rollback to savepoint rejected; release savepoint rejected');}}
 before(async()=>{
@@ -111,6 +112,46 @@ test('inbox pagination is stable and total unread includes conversations beyond 
  await asUser(admin);const page=await inbox();assert.equal(page.threads.length,50);assert.equal(page.has_more,true);assert.equal(page.unread_count,55);
  const next=await inbox(page.threads.at(-1));assert.equal(next.threads.length,5);assert.equal(next.has_more,false);
  assert.equal(new Set([...page.threads,...next.threads].map(t=>t.id)).size,55);
+}));
+
+test('customer deletion removes the full chat and receipts while preserving other conversations and the work',()=>isolated(async()=>{
+ await asUser(customer);const first=await send('Вопрос');
+ await asUser(stranger);const other=await send('Другой покупатель');
+ await asUser(admin);await read(first.conversation_id,first.message.seq);const reply=await send('Ответ',first.conversation_id);
+ await asUser(customer);await read(first.conversation_id,reply.message.seq);await remove(first.conversation_id,reply.message.id);
+ assert.deepEqual((await inbox()).threads,[]);
+ await db.exec('reset role');
+ for(const table of ['chat_messages','chat_reads'])assert.equal((await db.query(`select count(*)::int as n from public.${table} where conversation_id=$1`,[first.conversation_id])).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int as n from public.works where id=$1',[work])).rows[0].n,1);
+ await asUser(admin);const box=await inbox();assert.equal(box.threads.length,1);assert.equal(box.threads[0].id,other.conversation_id);assert.equal(box.unread_count,1);
+ await asUser(customer);const fresh=await send('Новая переписка');assert.notEqual(fresh.conversation_id,first.conversation_id);
+}));
+
+test('strangers, anon, missing identities and demoted masters cannot delete someone else’s chat',()=>isolated(async()=>{
+ await asUser(customer);const first=await send('Личное');
+ await asUser(stranger);await denied(()=>remove(first.conversation_id,first.message.id));
+ await asUser('');await denied(()=>remove(first.conversation_id,first.message.id));
+ await db.exec('reset role; set role anon');await denied(()=>remove(first.conversation_id,first.message.id));
+ await db.exec(`reset role; update public.profiles set role='customer' where id='${admin}';`);
+ await asUser(admin);await denied(()=>remove(first.conversation_id,first.message.id));
+ await asUser(otherAdmin);await remove(first.conversation_id,first.message.id);assert.equal((await inbox()).threads.length,0);
+}));
+
+test('a message arriving after confirmation prevents deletion; a fresh confirmation and retries succeed',()=>isolated(async()=>{
+ await asUser(customer);const first=await send('Первое');const second=await send('Новое');
+ await asUser(admin);await denied(()=>remove(first.conversation_id,first.message.id),'40001');
+ assert.equal((await inbox()).unread_count,2);
+ assert.equal((await db.query('select count(*)::int as n from public.chat_messages where conversation_id=$1',[first.conversation_id])).rows[0].n,2);
+ await remove(first.conversation_id,second.message.id);await remove(first.conversation_id,second.message.id);
+ assert.deepEqual((await inbox()).threads,[]);
+}));
+
+test('participants cannot bypass the delete RPC or forge a confirmation for a nonempty chat',()=>isolated(async()=>{
+ await asUser(customer);const first=await send('Вопрос');
+ await denied(()=>db.query('delete from public.chat_conversations where id=$1',[first.conversation_id]));
+ await denied(()=>remove(first.conversation_id,null),'40001');
+ await denied(()=>remove(first.conversation_id,crypto.randomUUID()),'40001');
+ assert.equal((await inbox()).threads.length,1);
 }));
 
 test('live verification script rolls back every message, conversation and work',async()=>{
