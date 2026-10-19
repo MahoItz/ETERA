@@ -270,27 +270,60 @@ export async function getAdminSession(): Promise<Session | null> {
     .from("profiles")
     .select("id")
     .eq("id", result.data.session.user.id)
+    .eq("role", "admin")
     .maybeSingle();
   fail(profile.error);
   return profile.data ? result.data.session : null;
+}
+
+export async function getSession(): Promise<Session | null> {
+  const result = await supabase.auth.getSession();
+  if (result.error) throw new Error(result.error.message);
+  return result.data.session;
 }
 
 export async function signIn(email: string, password: string) {
   const result = await supabase.auth.signInWithPassword({ email, password });
   fail(result.error);
   if (!result.data.session) throw new Error("Supabase не вернул сессию.");
-  const profile = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", result.data.session.user.id)
-    .maybeSingle();
-  fail(profile.error);
-  if (!profile.data) {
-    await supabase.auth.signOut();
-    throw new Error("У этой учётной записи нет прав редактора.");
-  }
   return result.data.session;
 }
+
+export async function signUp(email: string, password: string) {
+  const result = await supabase.auth.signUp({ email, password });
+  fail(result.error);
+  return result.data;
+}
+
+export async function loadFavoriteWorkIds(): Promise<Set<string>> {
+  const result = await supabase.from("favorites").select("work_id");
+  fail(result.error);
+  return new Set((result.data ?? []).map((favorite) => favorite.work_id));
+}
+
+export async function addFavorite(workId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Войдите в аккаунт, чтобы сохранить работу в избранное.");
+  const result = await supabase.from("favorites").insert({
+    user_id: session.user.id,
+    work_id: workId,
+  });
+  // A saved work in another tab is already in the desired state.
+  if (result.error && result.error.code !== "23505") {
+    throw new Error("Не удалось добавить работу в избранное. Попробуйте ещё раз.");
+  }
+}
+
+export async function removeFavorite(workId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Войдите в аккаунт, чтобы изменить избранное.");
+  const result = await supabase.from("favorites").delete()
+    .eq("user_id", session.user.id).eq("work_id", workId);
+  if (result.error) {
+    throw new Error("Не удалось убрать работу из избранного. Попробуйте ещё раз.");
+  }
+}
+
 export async function signOut() {
   const result = await supabase.auth.signOut();
   fail(result.error);

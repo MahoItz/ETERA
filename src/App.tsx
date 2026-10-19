@@ -22,6 +22,7 @@ import {
   Check,
   ChevronDown,
   Flower2,
+  Heart,
   GripVertical,
   ImagePlus,
   Maximize2,
@@ -52,11 +53,16 @@ import {
 } from "../lib/model";
 import {
   getAdminSession,
+  getSession,
+  loadFavoriteWorkIds,
+  addFavorite,
+  removeFavorite,
   loadCatalog,
   saveSettings,
   saveCategories,
   type CategoryDraft,
   signIn,
+  signUp,
   signOut,
   uploadPhoto,
   renewUploadedPhoto,
@@ -140,6 +146,11 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (value: st
 export default function Catalog() {
   const motionRoot = useRef<HTMLDivElement>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
+  const favoriteRequestPending = useRef(false);
+  const favoriteFeedback = useRef<HTMLParagraphElement>(null);
+  const [favoriteNotice, setFavoriteNotice] = useState<{
+    workId: string; message: string; error: boolean;
+  } | null>(null);
   const [motionPaused, setMotionPaused] = useState(false);
   const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
   const [treeEditor, setTreeEditor] = useState(false);
@@ -149,6 +160,10 @@ export default function Catalog() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [admin, setAdmin] = useState(false),
+    [userEmail, setUserEmail] = useState<string | null>(null),
+    [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set()),
+    [favoriteBusy, setFavoriteBusy] = useState<string | null>(null),
+    [accountOpen, setAccountOpen] = useState(false),
     [editingEnabled, setEditingEnabled] = useState(true),
     [signingOut, setSigningOut] = useState(false),
     [accountError, setAccountError] = useState(""),
@@ -169,14 +184,18 @@ export default function Catalog() {
     setError("");
     setLoading(true);
     try {
-      const [data, session] = await Promise.all([
+      const [data, currentSession, adminSession] = await Promise.all([
         loadCatalog(),
+        getSession(),
         getAdminSession(),
       ]);
+      const favorites = currentSession ? await loadFavoriteWorkIds() : new Set<string>();
       setWorks(data.works);
       setOrnaments(data.ornaments);
       setSettings(data.settings);
-      setAdmin(Boolean(session));
+      setAdmin(Boolean(adminSession));
+      setUserEmail(currentSession?.user.email ?? null);
+      setFavoriteIds(favorites);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить каталог");
     } finally {
@@ -221,6 +240,16 @@ export default function Catalog() {
     const t = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(t);
   }, [notice]);
+  useEffect(() => {
+    if (!favoriteNotice) return;
+    const timer = setTimeout(() => setFavoriteNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [favoriteNotice]);
+  useEffect(() => {
+    if (selected?.id === favoriteNotice?.workId) {
+      favoriteFeedback.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [favoriteNotice, selected?.id]);
   useEffect(() => {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
@@ -391,6 +420,10 @@ export default function Catalog() {
     try {
       await signOut();
       setAdmin(false);
+      setUserEmail(null);
+      setFavoriteIds(new Set());
+      setFavoriteNotice(null);
+      setAccountOpen(false);
       setEditingEnabled(true);
       setWorks((items) => visibleWorks(items));
       closeWork();
@@ -403,6 +436,43 @@ export default function Catalog() {
       setAccountError(e instanceof Error ? e.message : "Не удалось выйти. Попробуйте ещё раз.");
     } finally {
       setSigningOut(false);
+    }
+  }
+  async function toggleFavorite(work: Work) {
+    if (!userEmail) {
+      setLoginOpen(true);
+      return;
+    }
+    if (favoriteRequestPending.current) return;
+    favoriteRequestPending.current = true;
+    const wasFavorite = favoriteIds.has(work.id);
+    setFavoriteNotice(null);
+    setFavoriteBusy(work.id);
+    try {
+      if (wasFavorite) await removeFavorite(work.id);
+      else await addFavorite(work.id);
+      setFavoriteIds((ids) => {
+        const next = new Set(ids);
+        if (wasFavorite) next.delete(work.id);
+        else next.add(work.id);
+        return next;
+      });
+      setFavoriteNotice({
+        workId: work.id,
+        message: wasFavorite ? "Работа удалена из избранного." : "Работа добавлена в избранное.",
+        error: false,
+      });
+    } catch {
+      setFavoriteNotice({
+        workId: work.id,
+        message: wasFavorite
+          ? "Не удалось убрать работу из избранного. Попробуйте ещё раз."
+          : "Не удалось добавить работу в избранное. Попробуйте ещё раз.",
+        error: true,
+      });
+    } finally {
+      favoriteRequestPending.current = false;
+      setFavoriteBusy(null);
     }
   }
   return (
@@ -458,6 +528,20 @@ export default function Catalog() {
                 }}
               >
                 <Settings2 size={16} />Настройки сайта
+              </button>
+              <button type="button" disabled={signingOut} onClick={() => void logout()}>
+                <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
+              </button>
+              {accountError && <p className="form-error" role="alert">{accountError}</p>}
+            </div>
+          </details>
+        ) : userEmail ? (
+          <details className="account-menu" ref={accountMenu}>
+            <summary className="admin-toggle"><UserRound size={16} /><span>Аккаунт</span><ChevronDown size={13} /></summary>
+            <div className="account-panel">
+              <span className="account-caption">{userEmail}</span>
+              <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}>
+                <Heart size={16} />Избранное ({favoriteIds.size})
               </button>
               <button type="button" disabled={signingOut} onClick={() => void logout()}>
                 <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
@@ -618,9 +702,23 @@ export default function Catalog() {
                 onPointerMove={tilt}
                 onPointerLeave={resetTilt}
               >
-                <span className="card-number" aria-hidden="true">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
+                <div className="card-heading">
+                  <span className="card-number" aria-hidden="true">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {!canEdit && (
+                    <button
+                      type="button"
+                      className={"favorite-toggle" + (favoriteIds.has(w.id) ? " is-favorite" : "")}
+                      onClick={() => void toggleFavorite(w)}
+                      disabled={favoriteBusy !== null}
+                      aria-label={favoriteIds.has(w.id) ? `Убрать «${w.title}» из избранного` : `Добавить «${w.title}» в избранное`}
+                      aria-pressed={favoriteIds.has(w.id)}
+                    >
+                      <Heart size={20} fill={favoriteIds.has(w.id) ? "currentColor" : "none"} />
+                    </button>
+                  )}
+                </div>
                 <button
                   className="card-photo"
                   onClick={() => open(w)}
@@ -647,7 +745,8 @@ export default function Catalog() {
                   {w.featured && (
                     <span
                       className="featured-icon"
-                      aria-label="Избранная работа"
+                      aria-label="Выбор мастера"
+                      title="Выбор мастера"
                     >
                       <Star size={15} />
                     </span>
@@ -780,7 +879,12 @@ export default function Catalog() {
           </small>
         </div>
       </footer>
-      {notice && (
+      {favoriteNotice && !selected ? (
+        <div className={"toast" + (favoriteNotice.error ? " toast-error" : "")} role={favoriteNotice.error ? "alert" : "status"}>
+          {!favoriteNotice.error && <Check size={19} />}
+          {favoriteNotice.message}
+        </div>
+      ) : notice && !selected && (
         <div className="toast" role="status">
           <Check size={19} />
           {notice}
@@ -898,6 +1002,27 @@ export default function Catalog() {
                 <dd>Ручная работа</dd>
               </dl>
               <strong className="price">{money(selectedVariant?.price ?? selected.price)}</strong>
+              {!canEdit && (
+                <div className="favorite-detail-group">
+                  <button
+                    type="button"
+                    className={"button secondary favorite-detail" + (favoriteIds.has(selected.id) ? " is-favorite" : "")}
+                    onClick={() => void toggleFavorite(selected)}
+                    disabled={favoriteBusy !== null}
+                    aria-pressed={favoriteIds.has(selected.id)}
+                  >
+                    <Heart size={17} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} />
+                    {favoriteIds.has(selected.id) ? "В избранном" : "В избранное"}
+                  </button>
+                  {favoriteNotice?.workId === selected.id && (
+                    <p ref={favoriteFeedback}
+                      className={favoriteNotice.error ? "form-error favorite-feedback" : "form-success favorite-feedback"}
+                      role={favoriteNotice.error ? "alert" : "status"}>
+                      {favoriteNotice.message}
+                    </p>
+                  )}
+                </div>
+              )}
               {settings.contact ? (
                 <a
                   href={settings.contact}
@@ -954,6 +1079,25 @@ export default function Catalog() {
             await load();
           }}
         />
+      )}
+      {accountOpen && (
+        <Modal title="Личный кабинет" onClose={() => setAccountOpen(false)}>
+          <div className="account-content">
+            <p className="form-intro">{userEmail}</p>
+            <h3>Понравившиеся работы</h3>
+            {publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
+              <div className="favorite-list">
+                {publicWorks.filter((work) => favoriteIds.has(work.id)).map((work) => (
+                  <article key={work.id}>
+                    {work.photos[0] && <CatalogImage src={imageUrl(work.photos[0].url)} alt="" />}
+                    <div><strong>{work.title}</strong><span>{money(work.price)}</span></div>
+                    <button type="button" onClick={() => { setAccountOpen(false); open(work); }}>Открыть</button>
+                  </article>
+                ))}
+              </div>
+            ) : <p className="form-intro">В избранном пока нет работ. Нажмите на сердечко в каталоге, чтобы сохранить понравившуюся.</p>}
+          </div>
+        </Modal>
       )}
       {admin && settingsSection && (
         <SettingsEditor
@@ -1453,15 +1597,24 @@ function LoginEditor({
 }) {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
+    [registration, setRegistration] = useState(false),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [message, setMessage] = useState("");
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
+    setMessage("");
     try {
-      await signIn(email, password);
-      await onLoggedIn();
+      if (registration) {
+        const result = await signUp(email, password);
+        if (result.session) await onLoggedIn();
+        else setMessage("Проверьте почту: мы отправили ссылку для подтверждения регистрации.");
+      } else {
+        await signIn(email, password);
+        await onLoggedIn();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось войти");
     } finally {
@@ -1470,14 +1623,14 @@ function LoginEditor({
   }
   return (
     <Modal
-      title="Вход"
+      title={registration ? "Регистрация" : "Вход"}
       onClose={() => {
         if (!busy) onClose();
       }}
     >
       <form className="editor-form" onSubmit={submit}>
         <p className="form-intro">
-          Введите email и пароль своего аккаунта.
+          {registration ? "Создайте аккаунт, чтобы сохранять понравившиеся работы." : "Введите email и пароль своего аккаунта."}
         </p>
         <label>
           Email
@@ -1495,6 +1648,7 @@ function LoginEditor({
           <input
             type="password"
             autoComplete="current-password"
+            minLength={6}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -1506,6 +1660,7 @@ function LoginEditor({
             {error}
           </p>
         )}
+        {message && <p className="form-success" role="status">{message}</p>}
         <div className="form-footer">
           <button
             type="button"
@@ -1516,9 +1671,17 @@ function LoginEditor({
             Отмена
           </button>
           <button className="button primary" disabled={busy}>
-            {busy ? "Входим…" : "Войти"}
+            {busy ? (registration ? "Создаём аккаунт…" : "Входим…") : registration ? "Зарегистрироваться" : "Войти"}
           </button>
         </div>
+        <button
+          type="button"
+          className="auth-switch"
+          disabled={busy}
+          onClick={() => { setRegistration((value) => !value); setError(""); setMessage(""); }}
+        >
+          {registration ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
+        </button>
       </form>
     </Modal>
   );
