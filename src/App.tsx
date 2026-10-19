@@ -10,7 +10,6 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ default: module.PhotoLightbox })));
@@ -25,6 +24,7 @@ import {
   Heart,
   GripVertical,
   ImagePlus,
+  Images,
   Maximize2,
   Eye,
   LogOut,
@@ -82,26 +82,6 @@ function catalogLocation() {
   const workId = url.searchParams.get("work");
   return { workId, variantId: workId ? url.searchParams.get("variant") : null };
 }
-function tilt(e: ReactPointerEvent<HTMLElement>) {
-  if (
-    e.currentTarget.closest(".motion-paused") ||
-    e.pointerType === "touch" ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  )
-    return;
-  const el = e.currentTarget,
-    rect = el.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width - 0.5,
-    y = (e.clientY - rect.top) / rect.height - 0.5;
-  el.style.setProperty("--tilt-x", (-y * 5).toFixed(2) + "deg");
-  el.style.setProperty("--tilt-y", (x * 6).toFixed(2) + "deg");
-  el.style.setProperty("--move-x", (x * 14).toFixed(2) + "px");
-  el.style.setProperty("--move-y", (y * 12).toFixed(2) + "px");
-}
-function resetTilt(e: ReactPointerEvent<HTMLElement>) {
-  for (const name of ["--tilt-x", "--tilt-y", "--move-x", "--move-y"])
-    e.currentTarget.style.removeProperty(name);
-}
 function SortDropdown({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const root = useRef<HTMLDetailsElement>(null);
   const options = [["new", "Сначала избранное и новое"], ["name", "По названию"], ["price", "По цене"]];
@@ -146,6 +126,7 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (value: st
 export default function Catalog() {
   const motionRoot = useRef<HTMLDivElement>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
+  const workOpener = useRef<HTMLElement | null>(null);
   const favoriteRequestPending = useRef(false);
   const favoriteFeedback = useRef<HTMLParagraphElement>(null);
   const [favoriteNotice, setFavoriteNotice] = useState<{
@@ -251,6 +232,15 @@ export default function Catalog() {
     }
   }, [favoriteNotice, selected?.id]);
   useEffect(() => {
+    if (selected || !workOpener.current) return;
+    const trigger = workOpener.current;
+    workOpener.current = null;
+    const frame = requestAnimationFrame(() => {
+      if (trigger.isConnected) trigger.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
+  useEffect(() => {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
@@ -353,6 +343,7 @@ export default function Catalog() {
     else history.replaceState(state, "", `${url.pathname}${url.search}${url.hash}`);
   }
   function open(w: Work) {
+    workOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setLightboxOpen(false);
     setSelected(w);
     setPhotoIndex(0);
@@ -698,32 +689,8 @@ export default function Catalog() {
                 key={w.id}
                 className={"work-card card-" + i}
                 data-reveal
-                style={{ transitionDelay: Math.min(i % 3, 2) * 70 + "ms" }}
-                onPointerMove={tilt}
-                onPointerLeave={resetTilt}
               >
-                <div className="card-heading">
-                  <span className="card-number" aria-hidden="true">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  {!canEdit && (
-                    <button
-                      type="button"
-                      className={"favorite-toggle" + (favoriteIds.has(w.id) ? " is-favorite" : "")}
-                      onClick={() => void toggleFavorite(w)}
-                      disabled={favoriteBusy !== null}
-                      aria-label={favoriteIds.has(w.id) ? `Убрать «${w.title}» из избранного` : `Добавить «${w.title}» в избранное`}
-                      aria-pressed={favoriteIds.has(w.id)}
-                    >
-                      <Heart size={20} fill={favoriteIds.has(w.id) ? "currentColor" : "none"} />
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="card-photo"
-                  onClick={() => open(w)}
-                  aria-label={"Рассмотреть " + w.title}
-                >
+                <div className="card-photo">
                   {w.photos[0] ? (
                     <CatalogImage
                       src={imageUrl(w.photos[0].url)}
@@ -751,21 +718,38 @@ export default function Catalog() {
                       <Star size={15} />
                     </span>
                   )}
-                  <span className="photo-open">
-                    <ArrowUpRight size={23} />
-                  </span>
-                </button>
+                  {w.photos.length > 0 && (
+                    <span className="card-photo-count">
+                      <Images size={14} aria-hidden="true" />{w.photos.length} фото
+                    </span>
+                  )}
+                </div>
                 <div className="card-info">
-                  <span className="card-category">
-                    {w.category} · {w.material || "Ручная работа"}
-                  </span>
-                  <button className="title-button" onClick={() => open(w)}>
-                    <h3>{w.title}</h3>
-                    <ArrowUpRight size={18} />
-                  </button>
+                  <div className="card-meta">
+                    {w.category && <span className="card-category">{w.category}</span>}
+                    <span className="card-material">{w.material || "Ручная работа"}</span>
+                  </div>
+                  <h3 className="card-title">
+                    <button type="button" className="title-button" onClick={() => open(w)}
+                      aria-label={"Рассмотреть " + w.title} aria-haspopup="dialog">
+                      {w.title}
+                    </button>
+                  </h3>
                   <div className="card-bottom">
-                    <span>{money(w.price)}</span>
-                    <span>{w.photos.length} фото</span>
+                    <span className={"card-price" + (w.price === null ? " on-request" : "")}>{money(w.price)}</span>
+                    {!canEdit && (
+                      <button
+                        type="button"
+                        className={"favorite-toggle" + (favoriteIds.has(w.id) ? " is-favorite" : "")}
+                        onClick={() => void toggleFavorite(w)}
+                        disabled={favoriteBusy !== null}
+                        aria-label={favoriteIds.has(w.id) ? `Убрать «${w.title}» из избранного` : `Добавить «${w.title}» в избранное`}
+                        aria-pressed={favoriteIds.has(w.id)}
+                        title={favoriteIds.has(w.id) ? "Убрать из избранного" : "В избранное"}
+                      >
+                        <Heart size={20} fill={favoriteIds.has(w.id) ? "currentColor" : "none"} />
+                      </button>
+                    )}
                   </div>
                   {canEdit && (
                     <button className="edit-card" onClick={() => setEditing(w)}>
