@@ -1,7 +1,7 @@
 -- Database owner only. The fixture paths have no Storage objects. Everything
 -- below is rolled back, including config changes, leases, claims and tombstones.
 begin;
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles limit 1), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where role = 'admin' limit 1), true);
 do $$
 declare
   worker_secret text;

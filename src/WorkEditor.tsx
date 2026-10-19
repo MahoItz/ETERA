@@ -2,7 +2,9 @@ import { CatalogImage } from "./CatalogImage";
 import { useEffect, useId, useRef, useState, type FormEvent, type DragEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ImagePlus, Loader2, Plus, Star, Trash2, X } from "lucide-react";
 import type { Photo, Variant, Work } from "../lib/model";
-import { deleteWork, renewUploadedPhoto, saveWork, uploadPhoto } from "./catalog";
+import { measurementsFromDraft, sizeDraft, type Measurements, type SizeDraft } from "../lib/measurements";
+import { DimensionsEditor } from "./DimensionsEditor";
+import { deleteWork, renewUploadedPhoto, saveWork, uploadPhoto, loadDimensionSuggestions, deleteDimensionSuggestion, restoreDimensionSuggestion } from "./catalog";
 import { WorkSaveSession } from "./work-save";
 import { Modal, UnsavedChangesDialog, compressPhoto, imageUrl } from "./EditorUI";
 import "./work-editor.css";
@@ -74,6 +76,14 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const [category, setCategory] = useState(work?.category || categories[0] || "");
   const [material, setMaterial] = useState(work?.material || materials[0] || "Гипс");
   const [dimensions, setDimensions] = useState(work?.dimensions || "");
+  const [measurements, setMeasurements] = useState(() => sizeDraft(work?.measurements));
+  const [variantSizes, setVariantSizes] = useState<Record<string, SizeDraft>>(() => Object.fromEntries(
+    (work?.variants ?? []).map((variant) => [variant.id, sizeDraft(variant.measurements)]),
+  ));
+  const [dimensionSuggestions, setDimensionSuggestions] = useState<number[]>([]);
+  const [historyError, setHistoryError] = useState("");
+  const [removedSuggestion, setRemovedSuggestion] = useState<number | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [price, setPrice] = useState(work?.price?.toString() || "");
   const [availability, setAvailability] = useState<Work["availability"]>(work?.availability || "order");
   const [status, setStatus] = useState<Work["status"]>(work?.status || "draft");
@@ -97,11 +107,39 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
   const dragDepth = useRef(0);
   const chosenPhoto = photos.find((photo) => photo.url === activePhoto) || photos[0];
   const formSnapshot = JSON.stringify({
-    title, description, category, material, dimensions, price,
+    title, description, category, material, dimensions, measurements, variantSizes, price,
     availability, status, featured, photos, variants,
   });
   const [initialFormSnapshot] = useState(() => formSnapshot);
   const dirty = formSnapshot !== initialFormSnapshot;
+  let previewMeasurements: Measurements | null = null;
+  try { previewMeasurements = measurementsFromDraft(measurements); } catch { /* Keep invalid input editable until save. */ }
+  useEffect(() => {
+    let active = true;
+    loadDimensionSuggestions().then((values) => { if (active) setDimensionSuggestions(values); })
+      .catch((error) => { if (active) setHistoryError(error instanceof Error ? error.message : "Не удалось загрузить прошлые размеры."); });
+    return () => { active = false; };
+  }, []);
+  async function removeSuggestion(mm: number) {
+    if (historyBusy) return;
+    setHistoryBusy(true); setHistoryError("");
+    try {
+      await deleteDimensionSuggestion(mm);
+      setDimensionSuggestions((values) => values.filter((value) => value !== mm));
+      setRemovedSuggestion(mm);
+    } catch (error) { setHistoryError(error instanceof Error ? error.message : "Не удалось удалить подсказку."); }
+    finally { setHistoryBusy(false); }
+  }
+  async function undoRemoveSuggestion() {
+    if (removedSuggestion === null || historyBusy) return;
+    setHistoryBusy(true); setHistoryError("");
+    try {
+      await restoreDimensionSuggestion(removedSuggestion);
+      setDimensionSuggestions((values) => [...new Set([...values, removedSuggestion])].sort((a, b) => a - b));
+      setRemovedSuggestion(null);
+    } catch (error) { setHistoryError(error instanceof Error ? error.message : "Не удалось вернуть подсказку."); }
+    finally { setHistoryBusy(false); }
+  }
   useEffect(() => {
     if (deleteError) deleteErrorMessage.current?.focus();
   }, [deleteError]);
@@ -174,6 +212,15 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
     if (!category.trim()) { setError("Выберите или добавьте категорию."); return; }
     if (variants.some((variant) => !variant.name.trim())) { setError("Добавьте название каждой отдельной фигурке."); return; }
     if (status === "published" && !photos.length) { setError("Добавьте хотя бы одно фото, чтобы показать работу в каталоге."); return; }
+    let savedMeasurements: Measurements | null;
+    const savedVariantSizes = new Map<string, Measurements | null>();
+    try {
+      savedMeasurements = measurementsFromDraft(measurements);
+      for (const variant of variants) {
+        try { savedVariantSizes.set(variant.id, measurementsFromDraft(variantSizes[variant.id] ?? sizeDraft(null))); }
+        catch (error) { throw new Error(`${variant.name}: ${error instanceof Error ? error.message : "проверьте размеры"}`); }
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : "Проверьте размеры."); return; }
     setBusy(true); setError(""); setProgress("Сохраняем работу");
     try {
       const savedPhotos: Photo[] = [];
@@ -195,10 +242,12 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
         name: variant.name.trim(),
         imageUrl: variant.imageUrl ? photoUrlMap.get(variant.imageUrl) ?? savedPhotos[0]?.url ?? null : null,
         position,
+        measurements: savedVariantSizes.get(variant.id) ?? null,
       }));
       setProgress("Сохраняем работу");
       onSaved(await saveSession.save({
-        title, description, category, material, dimensions, price: price.trim() ? Number(price) : null,
+        title, description, category, material, dimensions: savedMeasurements ? "" : dimensions,
+        measurements: savedMeasurements, price: price.trim() ? Number(price) : null,
         availability, status, featured, photos: savedPhotos,
         variants: savedVariants,
         treeImage: work?.treeImage, showOnTree: work?.showOnTree,
@@ -286,6 +335,11 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
                 <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={variant.price ?? ""} onChange={(event) => updateVariant(variant.id, { price: event.target.value === "" ? null : Number(event.target.value) })} placeholder="По запросу" disabled={busy} /></label>
                 <label>Доступность<select value={variant.availability} onChange={(event) => updateVariant(variant.id, { availability: event.target.value as Variant["availability"] })} disabled={busy}><option value="available">В наличии</option><option value="order">Под заказ</option><option value="sold">Продано</option></select></label>
               </div>
+              <DimensionsEditor label={`Размеры: ${variant.name || `Фигурка ${index + 1}`}`}
+                value={variantSizes[variant.id] ?? sizeDraft(null)} suggestions={dimensionSuggestions}
+                onChange={(value) => setVariantSizes((sizes) => ({ ...sizes, [variant.id]: value }))}
+                onDelete={removeSuggestion} disabled={busy || historyBusy}
+                inherited={previewMeasurements ? sizeDraft({ ...previewMeasurements, unit: variantSizes[variant.id]?.unit ?? "cm" }) : sizeDraft(null)} />
               {!!photos.length && <div className="variant-photo-picker" role="group" aria-label={`Фото фигурки ${index + 1}`}>
                 <span>Фото фигурки</span>
                 <div>{photos.map((photo, photoIndex) => <button type="button" key={photo.url} className={variant.imageUrl === photo.url ? "selected" : ""} aria-label={`Выбрать фото ${photoIndex + 1}`} aria-pressed={variant.imageUrl === photo.url} disabled={busy} onClick={() => updateVariant(variant.id, { imageUrl: photo.url })}><CatalogImage src={imageUrl(photo.url)} alt="" /><small>{photoIndex + 1}</small></button>)}</div>
@@ -308,8 +362,18 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           </section>
           <section className="work-form-section" aria-labelledby="work-detail-title">
             <div className="work-section-heading"><h3 id="work-detail-title">Детали и наличие</h3></div>
+            <DimensionsEditor value={measurements} onChange={setMeasurements} suggestions={dimensionSuggestions}
+              onDelete={removeSuggestion} disabled={busy || historyBusy} />
+            {historyError && <p className="form-error" role="alert">{historyError}</p>}
+            {removedSuggestion !== null && <p className="dimension-history-message" role="status">
+              Подсказка удалена. Размеры работ не изменились.
+              <button type="button" disabled={busy || historyBusy} onClick={() => void undoRemoveSuggestion()}>Вернуть</button>
+            </p>}
+            {dimensions && !previewMeasurements && <div className="size-legacy">
+              Прежняя запись: <strong>{dimensions}</strong>. Уточните направления в полях выше, чтобы показать схему.
+              <br /><button type="button" disabled={busy} onClick={() => setDimensions("")}>Удалить прежнюю запись</button>
+            </div>}
             <div className="form-row">
-              <label>Размеры<input maxLength={150} value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="Например, 8 × 5 см" disabled={busy} /></label>
               <label>Цена, ₽<input type="number" min={0} max={10000000} step="any" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="По запросу" disabled={busy} /></label>
             </div>
             <div className="form-row">

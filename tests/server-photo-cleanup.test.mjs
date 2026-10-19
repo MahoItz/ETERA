@@ -32,7 +32,7 @@ async function rejectsSql(fn, code) {
 before(async () => {
   db = await createTestDatabase();
   await db.exec(`insert into auth.users values ('${admin}'), ('${otherAdmin}'), ('${visitor}');
-    insert into public.profiles(id) values ('${admin}'), ('${otherAdmin}');
+    insert into public.profiles(id) values ('${admin}'), ('${otherAdmin}') on conflict (id) do update set role = 'admin';
     select set_config('request.jwt.claim.sub', '${admin}', false);`);
   await db.query('update private.photo_cleanup_config set enabled = true, worker_secret = $1', [secret]);
 });

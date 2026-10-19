@@ -15,7 +15,7 @@ const save = async (revision, names, originals) =>
 before(async () => {
   db = await createTestDatabase();
   await db.exec(`insert into auth.users values ('${admin}');
-    insert into public.profiles(id) values ('${admin}');
+    insert into public.profiles(id) values ('${admin}') on conflict (id) do update set role = 'admin';
     select set_config('request.jwt.claim.sub', '${admin}', false);
     delete from public.categories;
     insert into public.categories(name, position) values ('Old', 0), ('Keep', 1);

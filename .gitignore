@@ -71,3 +71,4 @@ public/images/exported/
 
 # Local development database bootstrap metadata
 .local/
+/supabase/.temp/

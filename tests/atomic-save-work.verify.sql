@@ -1,7 +1,7 @@
 -- Run as the database owner. All fixtures and receipts are rolled back.
 -- Requires the migration and at least one existing administrator.
 begin;
-select set_config('request.jwt.claim.sub', (select id::text from public.profiles limit 1), true);
+select set_config('request.jwt.claim.sub', (select id::text from public.profiles where role = 'admin' limit 1), true);
 set local role authenticated;
 
 do $$

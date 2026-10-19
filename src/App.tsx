@@ -1,4 +1,6 @@
 import { CatalogImage } from "./CatalogImage";
+import { SizeDiagram } from "./SizeDiagram";
+import { resolveMeasurements } from "../lib/measurements";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
 import { TreeHero } from "./TreeHero";
 import { treeItems, type TreeOrnament } from "./tree-items";
@@ -320,6 +322,7 @@ export default function Catalog() {
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const selectedMeasurements = resolveMeasurements(selectedVariant?.measurements, selected?.measurements);
   const lightboxPhotos = [...(selected?.photos ?? [])];
   for (const variant of selected?.variants ?? []) {
     if (variant.imageUrl && !lightboxPhotos.some((photo) => photo.url === variant.imageUrl)) {
@@ -969,6 +972,7 @@ export default function Catalog() {
                   </div>
                 </section>
               )}
+              {selectedMeasurements && <SizeDiagram value={selectedMeasurements} />}
               <dl>
                 {selected.material && (
                   <>
@@ -976,7 +980,7 @@ export default function Catalog() {
                     <dd>{selected.material}</dd>
                   </>
                 )}
-                {selected.dimensions && (
+                {!selectedMeasurements && selected.dimensions && (
                   <>
                     <dt>Размеры</dt>
                     <dd>{selected.dimensions}</dd>

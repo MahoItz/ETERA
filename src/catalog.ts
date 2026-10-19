@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import type { Measurements } from "../lib/measurements";
 import { defaults, type Settings, type Variant, type Work } from "../lib/model";
 import { supabase } from "./supabase";
 import type { TreeOrnament } from "./tree-items";
@@ -12,6 +13,7 @@ type WorkRow = Record<string, unknown> & {
   description: string;
   material: string;
   dimensions: string;
+  measurements?: Measurements | null;
   price: number | null;
   availability: Work["availability"];
   status: Work["status"];
@@ -35,6 +37,7 @@ type WorkRow = Record<string, unknown> & {
     price: number | null;
     availability: Variant["availability"];
     position: number;
+    measurements?: Measurements | null;
   }>;
 };
 
@@ -49,6 +52,7 @@ function mapWork(row: WorkRow): Work {
     category: row.category?.name ?? "Без категории",
     material: row.material,
     dimensions: row.dimensions,
+    measurements: row.measurements ?? null,
     price: row.price === null ? null : Number(row.price),
     availability: row.availability,
     status: row.status,
@@ -60,8 +64,9 @@ function mapWork(row: WorkRow): Work {
       .map(({ url, alt }) => ({ url, alt })),
     variants: (row.variants ?? [])
       .sort((a, b) => a.position - b.position)
-      .map(({ id, slug, name, image_url, price, availability, position }) => ({
+      .map(({ id, slug, name, image_url, price, availability, position, measurements }) => ({
         id, slug, name, imageUrl: image_url?.startsWith("blob:") ? null : image_url ?? null, price: price === null ? null : Number(price), availability, position,
+        measurements: measurements ?? null,
       })),
     revision: row.revision,
     updatedAt: row.updated_at,
@@ -274,6 +279,22 @@ export async function getAdminSession(): Promise<Session | null> {
     .maybeSingle();
   fail(profile.error);
   return profile.data ? result.data.session : null;
+}
+
+export async function loadDimensionSuggestions(): Promise<number[]> {
+  const result = await supabase.from("dimension_suggestions").select("value_mm").order("value_mm");
+  if (result.error) throw new Error("Не удалось загрузить прошлые размеры. Размер можно ввести вручную.");
+  return (result.data ?? []).map((row) => Number(row.value_mm));
+}
+
+export async function deleteDimensionSuggestion(mm: number) {
+  const result = await supabase.from("dimension_suggestions").delete().eq("value_mm", mm);
+  if (result.error) throw new Error("Не удалось удалить размер из подсказок. Попробуйте ещё раз.");
+}
+
+export async function restoreDimensionSuggestion(mm: number) {
+  const result = await supabase.from("dimension_suggestions").insert({ value_mm: mm });
+  if (result.error && result.error.code !== "23505") throw new Error("Не удалось вернуть размер в подсказки. Попробуйте ещё раз.");
 }
 
 export async function getSession(): Promise<Session | null> {
