@@ -1,6 +1,10 @@
 import { CatalogImage } from "./CatalogImage";
-import { ContactLinks } from "./ContactLinks";
-import { contactLinks } from "../lib/contacts";
+import { MasterContacts } from "./MasterContacts";
+import { ProductChat } from "./ProductChat";
+import { ChatInbox } from "./ChatInbox";
+import { ChatNotifications } from "./ChatNotifications";
+import { useChatInbox } from "./useChatInbox";
+import "./chat.css";
 import { SizeDiagram } from "./SizeDiagram";
 import { variantPhotos } from "../lib/variant-gallery";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
@@ -20,7 +24,6 @@ const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ d
 const WorkEditor = lazy(() => import("./WorkEditor").then((module) => ({ default: module.WorkEditor })));
 const AdminAccount = lazy(() => import("./AdminAccount").then((module) => ({ default: module.AdminAccount })));
 import {
-  ArrowUpRight,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -33,6 +36,7 @@ import {
   Maximize2,
   Eye,
   LogOut,
+  MessageCircle,
   LockKeyhole,
   Pause,
   Play,
@@ -151,6 +155,7 @@ export default function Catalog() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [admin, setAdmin] = useState(false),
+    [userId, setUserId] = useState<string | null>(null),
     [userEmail, setUserEmail] = useState<string | null>(null),
     [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set()),
     [favoriteBusy, setFavoriteBusy] = useState<string | null>(null),
@@ -171,6 +176,10 @@ export default function Catalog() {
     [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
+  const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages">("overview");
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const chatInbox = useChatInbox(userId);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const collectionOverview = Boolean(selected?.variants.length && !selected.soldAsSet && !selectedVariant);
   const selectedMeasurements = selectedVariant ? selectedVariant.measurements ?? null : collectionOverview ? null : selected?.measurements;
@@ -193,6 +202,7 @@ export default function Catalog() {
       setSettings(data.settings);
       setAdmin(Boolean(adminSession));
       setUserEmail(currentSession?.user.email ?? null);
+      setUserId(currentSession?.user.id ?? null);
       setFavoriteIds(favorites);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить каталог");
@@ -207,6 +217,9 @@ export default function Catalog() {
     if (loading) return;
     const applyLocation = () => {
       setAdminAccountOpen(new URL(window.location.href).searchParams.get("account") === "admin");
+      const section = new URL(window.location.href).searchParams.get("section");
+      setAdminSection(section === "messages" || section === "settings" ? section : "overview");
+      setSelectedThreadId(new URL(window.location.href).searchParams.get("conversation"));
       const { workId, variantId } = catalogLocation();
       const work = works.find((item) => (item.slug === workId || item.id === workId)
         && (canEdit || (item.status === "published" && item.availability !== "sold"))) ?? null;
@@ -270,6 +283,7 @@ export default function Catalog() {
   useEffect(() => {
     if (lightboxOpen || selectedPhotos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable)) return;
       if (e.key === "ArrowRight") {
         setPhotoIndex((i) => (i + 1) % selectedPhotos.length);
       }
@@ -341,22 +355,37 @@ export default function Catalog() {
       )
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
-  const mainContact = contactLinks(settings)[0];
   function navigateAccount(show: boolean) {
     const url = new URL(window.location.href);
     if (show) url.searchParams.set("account", "admin");
     else url.searchParams.delete("account");
     url.searchParams.delete("work");
     url.searchParams.delete("variant");
+    url.searchParams.delete("section");
+    url.searchParams.delete("conversation");
     url.hash = "";
     history.pushState({ catalogRoute: true, version: 2, dialogDepth: 0 }, "", url.href);
     setAdminAccountOpen(show);
+    setAdminSection("overview");
+    setSelectedThreadId(null);
     setSelected(null);
     setSelectedVariantId(null);
     setLightboxOpen(false);
     setAccountOpen(false);
     if (accountMenu.current) accountMenu.current.open = false;
     window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  function changeAdminSection(section: "overview" | "settings" | "messages", conversationId: string | null = null) {
+    const url = new URL(window.location.href);
+    if (section === "overview") url.searchParams.delete("section"); else url.searchParams.set("section", section);
+    if (conversationId) url.searchParams.set("conversation", conversationId); else url.searchParams.delete("conversation");
+    history.replaceState(history.state, "", url.href);
+    setAdminSection(section); setSelectedThreadId(conversationId);
+  }
+  function openMessages(conversationId: string | null) {
+    if (accountMenu.current) accountMenu.current.open = false;
+    if (admin) { navigateAccount(true); changeAdminSection("messages", conversationId); }
+    else { setSelectedThreadId(conversationId); setMessagesOpen(true); setAccountOpen(false); }
   }
   function openAccountWork(id: string) {
     const work = works.find((item) => item.id === id);
@@ -456,6 +485,9 @@ export default function Catalog() {
       await signOut();
       setAdmin(false);
       setUserEmail(null);
+      setUserId(null);
+      setMessagesOpen(false);
+      setSelectedThreadId(null);
       setFavoriteIds(new Set());
       setFavoriteNotice(null);
       setAccountOpen(false);
@@ -530,6 +562,8 @@ export default function Catalog() {
           <a href="#catalog">Коллекция</a>
           <a href="#story">О мастерской</a>
         </nav>
+        <div className="header-account-actions">
+        {userId && <ChatNotifications inbox={chatInbox} onOpen={openMessages} />}
         {admin ? (
           <details
             className="account-menu"
@@ -578,6 +612,7 @@ export default function Catalog() {
               <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}>
                 <Heart size={16} />Избранное ({favoriteIds.size})
               </button>
+              <button type="button" onClick={() => openMessages(null)}><MessageCircle size={16} />Сообщения{chatInbox.unread_count > 0 && <span className="chat-count">{chatInbox.unread_count}</span>}</button>
               <button type="button" disabled={signingOut} onClick={() => void logout()}>
                 <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
               </button>
@@ -589,6 +624,7 @@ export default function Catalog() {
             <UserRound size={16} /><span>Войти</span>
           </button>
         )}
+        </div>
       </header>
       {adminAccountOpen ? (
         admin ? <Suspense fallback={<main className="account-access" role="status">Загружаем личный кабинет…</main>}>
@@ -596,6 +632,10 @@ export default function Catalog() {
             email={userEmail}
             onBack={() => navigateAccount(false)}
             onOpenWork={openAccountWork}
+            section={adminSection}
+            onSectionChange={changeAdminSection}
+            unreadCount={chatInbox.unread_count}
+            messages={userId && <ChatInbox inbox={chatInbox} userId={userId} admin requestedId={selectedThreadId} />}
             settingsForm={<SettingsEditor embedded settings={settings} section="general" onClose={() => navigateAccount(false)} onSaved={(next) => {
               setSettings(next);
               setNotice("Настройки сохранены");
@@ -887,21 +927,7 @@ export default function Catalog() {
                 <span>Ваше настроение</span>
                 <span>Живые детали</span>
               </div>
-              {mainContact ? (
-                <a
-                  className="button primary"
-                  href={mainContact.href}
-                  target={mainContact.phone ? undefined : "_blank"}
-                  rel="noreferrer"
-                >
-                  Обсудить свою историю <ArrowUpRight size={18} />
-                </a>
-              ) : (
-                <p className="contact-unset">
-                  Контакт мастера появится здесь после настройки.
-                </p>
-              )}
-              <ContactLinks settings={settings} />
+              <MasterContacts settings={settings} showEmpty />
             </div>
           </div>
           <div className="story-signature" aria-hidden="true">
@@ -1083,17 +1109,9 @@ export default function Catalog() {
                   )}
                 </div>
               )}
-              {mainContact ? (
-                <a
-                  href={mainContact.href}
-                  target={mainContact.phone ? undefined : "_blank"}
-                  rel="noreferrer"
-                  className="button primary"
-                >
-                  Обсудить с мастером <ArrowUpRight size={18} />
-                </a>
-              ) : null}
-              <ContactLinks settings={settings} />
+              <MasterContacts settings={settings}>
+                {!admin && <ProductChat key={selected.id} workId={selected.id} userId={userId} onLogin={() => setLoginOpen(true)} />}
+              </MasterContacts>
               {canEdit && (
                 <button
                   className="button secondary"
@@ -1141,6 +1159,9 @@ export default function Catalog() {
           }}
         />
       )}
+      {userId && messagesOpen && <Modal title="Переписка с мастером" wide onClose={() => setMessagesOpen(false)}>
+        <div className="customer-messages"><ChatInbox inbox={chatInbox} userId={userId} admin={false} requestedId={selectedThreadId} /></div>
+      </Modal>}
       {accountOpen && (
         <Modal title="Личный кабинет" onClose={() => setAccountOpen(false)}>
           <div className="account-content">

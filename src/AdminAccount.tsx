@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, BarChart3, Heart, Image, LayoutDashboard, RefreshCw, Settings2, Users } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BarChart3, Heart, Image, LayoutDashboard, MessageCircle, RefreshCw, Settings2, Users } from "lucide-react";
 import { loadAdminDashboard, type AdminDashboardData, type DashboardPeriod } from "./admin-dashboard";
 import { CatalogImage } from "./CatalogImage";
 import { imageUrl } from "./EditorUI";
@@ -10,13 +10,16 @@ const workStatus = (work: AdminDashboardData["popular_works"][number]) =>
   work.availability === "sold" ? "Продано" : work.status === "draft" ? "Черновик"
     : work.status === "archived" ? "В архиве" : "На сайте";
 
-export function AdminAccount({ email, settingsForm, onBack, onOpenWork }: {
+export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section, onSectionChange, messages, unreadCount }: {
   email: string | null;
   settingsForm: ReactNode;
   onBack: () => void;
   onOpenWork: (id: string) => void;
+  section: "overview" | "settings" | "messages";
+  onSectionChange: (section: "overview" | "settings" | "messages") => void;
+  messages: ReactNode;
+  unreadCount: number;
 }) {
-  const [section, setSection] = useState<"overview" | "settings">("overview");
   const [period, setPeriod] = useState<DashboardPeriod>(30);
   const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState<AdminDashboardData | null>(null);
@@ -53,13 +56,14 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork }: {
         <aside className="account-sidebar">
           <div className="account-identity"><span>Администратор</span><strong>{email}</strong></div>
           <nav aria-label="Разделы личного кабинета">
-            <button type="button" aria-current={section === "overview" ? "page" : undefined} onClick={() => setSection("overview")}><LayoutDashboard size={18} />Обзор</button>
-            <button type="button" aria-current={section === "settings" ? "page" : undefined} onClick={() => setSection("settings")}><Settings2 size={18} />Настройки сайта</button>
+            <button type="button" aria-current={section === "overview" ? "page" : undefined} onClick={() => onSectionChange("overview")}><LayoutDashboard size={18} />Обзор</button>
+            <button type="button" aria-current={section === "messages" ? "page" : undefined} onClick={() => onSectionChange("messages")}><MessageCircle size={18} />Сообщения{unreadCount > 0 && <span className="chat-count">{unreadCount}</span>}</button>
+            <button type="button" aria-current={section === "settings" ? "page" : undefined} onClick={() => onSectionChange("settings")}><Settings2 size={18} />Настройки сайта</button>
           </nav>
           <p className="account-sidebar-note">Статистика и настройки доступны только администратору.</p>
         </aside>
         <div className="account-main">
-          {section === "settings" ? (
+          {section === "messages" ? messages : section === "settings" ? (
             <section className="account-surface account-settings" aria-labelledby="account-settings-heading">
               <h2 id="account-settings-heading">Настройки сайта</h2>
               <p className="form-intro">Название мастерской, социальные сети и номер телефона для связи с вами.</p>

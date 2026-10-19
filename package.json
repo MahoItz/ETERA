@@ -10,9 +10,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint src lib --ignore-pattern dist",
-    "test": "node --experimental-strip-types --test tests/catalog.test.ts tests/tree-items.test.ts tests/work-save.test.ts tests/work-photo-cleanup.test.ts tests/photo-cleanup-worker.test.ts tests/atomic-save-work.test.mjs tests/atomic-save-categories.test.mjs tests/server-photo-cleanup.test.mjs tests/measurements.test.ts tests/measurements-db.test.mjs tests/variant-gallery.test.ts tests/variant-galleries-db.test.mjs tests/admin-dashboard-db.test.mjs tests/contacts.test.ts",
+    "test": "node --experimental-strip-types --test tests/catalog.test.ts tests/tree-items.test.ts tests/work-save.test.ts tests/work-photo-cleanup.test.ts tests/photo-cleanup-worker.test.ts tests/atomic-save-work.test.mjs tests/atomic-save-categories.test.mjs tests/server-photo-cleanup.test.mjs tests/measurements.test.ts tests/measurements-db.test.mjs tests/variant-gallery.test.ts tests/variant-galleries-db.test.mjs tests/admin-dashboard-db.test.mjs tests/contacts.test.ts tests/chat-db.test.mjs",
     "test:admin": "node --experimental-strip-types --test tests/admin-dashboard-db.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:chat": "node --experimental-strip-types --test tests/chat-db.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",
