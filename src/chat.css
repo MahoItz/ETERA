@@ -17,8 +17,8 @@
 .chat-notification-panel > button > span:first-child { display: flex; align-items: center; gap: 10px; justify-content: space-between; overflow-wrap: anywhere; line-height: 1.5; }
 .chat-notification-panel small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
 .chat-notification-panel .chat-all-messages { margin-top: 8px; font-weight: 600; text-align: center; display: block; }
-.product-chat > .button { margin: 6px 0 16px; }
-.product-chat > div[hidden] { display: none; }
+.write-to-master { margin: 6px 0 16px; }
+.chat-show-all { padding: 8px 0; margin-bottom: 14px; border: 0; background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
 .chat-conversation { min-width: 0; }
 .chat-hint { margin: 12px 0; font-size: 12px; line-height: 1.8; color: var(--muted); }
 .chat-hint button, .chat-error button { border: 0; background: transparent; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 5px 0; }

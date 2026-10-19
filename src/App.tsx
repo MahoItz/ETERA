@@ -1,6 +1,6 @@
 import { CatalogImage } from "./CatalogImage";
 import { MasterContacts } from "./MasterContacts";
-import { ProductChat } from "./ProductChat";
+import { WorkChat } from "./WorkChat";
 import { ChatInbox } from "./ChatInbox";
 import { ChatNotifications } from "./ChatNotifications";
 import { useChatInbox } from "./useChatInbox";
@@ -179,6 +179,7 @@ export default function Catalog() {
   const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages">("overview");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const [messageWork, setMessageWork] = useState<{ id: string; title: string } | null>(null);
   const chatInbox = useChatInbox(userId);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const collectionOverview = Boolean(selected?.variants.length && !selected.soldAsSet && !selectedVariant);
@@ -281,7 +282,7 @@ export default function Catalog() {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
-    if (lightboxOpen || selectedPhotos.length < 2) return;
+    if (lightboxOpen || messagesOpen || loginOpen || selectedPhotos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable)) return;
       if (e.key === "ArrowRight") {
@@ -295,7 +296,7 @@ export default function Catalog() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedPhotos.length, lightboxOpen]);
+  }, [selectedPhotos.length, lightboxOpen, messagesOpen, loginOpen]);
   useEffect(() => {
     if (
       motionPaused ||
@@ -383,6 +384,7 @@ export default function Catalog() {
     setAdminSection(section); setSelectedThreadId(conversationId);
   }
   function openMessages(conversationId: string | null) {
+    setMessageWork(null);
     if (accountMenu.current) accountMenu.current.open = false;
     if (admin) { navigateAccount(true); changeAdminSection("messages", conversationId); }
     else { setSelectedThreadId(conversationId); setMessagesOpen(true); setAccountOpen(false); }
@@ -487,6 +489,7 @@ export default function Catalog() {
       setUserEmail(null);
       setUserId(null);
       setMessagesOpen(false);
+      setMessageWork(null);
       setSelectedThreadId(null);
       setFavoriteIds(new Set());
       setFavoriteNotice(null);
@@ -1109,9 +1112,13 @@ export default function Catalog() {
                   )}
                 </div>
               )}
-              <MasterContacts settings={settings}>
-                {!admin && <ProductChat key={selected.id} workId={selected.id} userId={userId} onLogin={() => setLoginOpen(true)} />}
-              </MasterContacts>
+              {!admin && <MasterContacts settings={settings}>
+                <button type="button" className="button primary write-to-master" aria-haspopup="dialog" onClick={() => {
+                  setMessageWork({ id: selected.id, title: selected.title });
+                  setSelectedThreadId(null);
+                  setMessagesOpen(true);
+                }}><MessageCircle size={18} />Написать мастеру</button>
+              </MasterContacts>}
               {canEdit && (
                 <button
                   className="button secondary"
@@ -1159,8 +1166,11 @@ export default function Catalog() {
           }}
         />
       )}
-      {userId && messagesOpen && <Modal title="Переписка с мастером" wide onClose={() => setMessagesOpen(false)}>
-        <div className="customer-messages"><ChatInbox inbox={chatInbox} userId={userId} admin={false} requestedId={selectedThreadId} /></div>
+      {messagesOpen && (userId || messageWork) && <Modal title="Переписка с мастером" wide onClose={() => { setMessagesOpen(false); setMessageWork(null); }}>
+        <div className="customer-messages">{messageWork ? <>
+          {userId && <button type="button" className="chat-show-all" onClick={() => { setMessageWork(null); setSelectedThreadId(null); }}>Все переписки</button>}
+          <WorkChat key={messageWork.id} workId={messageWork.id} title={messageWork.title} userId={userId} onLogin={() => setLoginOpen(true)} />
+        </> : userId && <ChatInbox inbox={chatInbox} userId={userId} admin={false} requestedId={selectedThreadId} />}</div>
       </Modal>}
       {accountOpen && (
         <Modal title="Личный кабинет" onClose={() => setAccountOpen(false)}>
