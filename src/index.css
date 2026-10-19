@@ -221,7 +221,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .card-info { padding: 22px 9px 0; }
 .card-category { font-size: 10px; color: #75506b; letter-spacing: .8px; }
 .title-button { border: 0; padding: 0; background: none; width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 13px; margin: 11px 0 19px; }
-.title-button h3 { margin: 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.14; letter-spacing: -.6px; }
+.title-button h3 { min-height: 2.28em; margin: 0; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.14; letter-spacing: -.6px; }
 .title-button > svg { flex-shrink: 0; transition: transform .25s; }
 .title-button:hover > svg { transform: translate(3px, -3px); }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding-top: 15px; border-top: 1px solid #b895b154; }
