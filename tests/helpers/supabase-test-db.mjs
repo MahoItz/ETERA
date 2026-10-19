@@ -5,7 +5,7 @@ export async function createTestDatabase() {
   const db = new PGlite();
   // Emulate platform schemas, roles and default grants. No remote resources.
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
-    create schema auth; create table auth.users(id uuid primary key);
+    create schema auth; create table auth.users(id uuid primary key, created_at timestamptz default now(), is_anonymous boolean default false);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to anon, authenticated, service_role;
     create schema storage;

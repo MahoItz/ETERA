@@ -1,4 +1,6 @@
 import { CatalogImage } from "./CatalogImage";
+import { ContactLinks } from "./ContactLinks";
+import { contactLinks } from "../lib/contacts";
 import { SizeDiagram } from "./SizeDiagram";
 import { variantPhotos } from "../lib/variant-gallery";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
@@ -16,6 +18,7 @@ import {
 
 const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ default: module.PhotoLightbox })));
 const WorkEditor = lazy(() => import("./WorkEditor").then((module) => ({ default: module.WorkEditor })));
+const AdminAccount = lazy(() => import("./AdminAccount").then((module) => ({ default: module.AdminAccount })));
 import {
   ArrowUpRight,
   ArrowLeft,
@@ -152,6 +155,7 @@ export default function Catalog() {
     [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set()),
     [favoriteBusy, setFavoriteBusy] = useState<string | null>(null),
     [accountOpen, setAccountOpen] = useState(false),
+    [adminAccountOpen, setAdminAccountOpen] = useState(() => new URL(window.location.href).searchParams.get("account") === "admin"),
     [editingEnabled, setEditingEnabled] = useState(true),
     [signingOut, setSigningOut] = useState(false),
     [accountError, setAccountError] = useState(""),
@@ -202,6 +206,7 @@ export default function Catalog() {
   useEffect(() => {
     if (loading) return;
     const applyLocation = () => {
+      setAdminAccountOpen(new URL(window.location.href).searchParams.get("account") === "admin");
       const { workId, variantId } = catalogLocation();
       const work = works.find((item) => (item.slug === workId || item.id === workId)
         && (canEdit || (item.status === "published" && item.availability !== "sold"))) ?? null;
@@ -316,7 +321,7 @@ export default function Catalog() {
       media.removeEventListener("change", reduce);
       for (const el of elements) el.classList.remove("reveal-pending");
     };
-  }, [loading, canEdit, query, category, sort, scope, limit, motionPaused]);
+  }, [loading, canEdit, query, category, sort, scope, limit, motionPaused, adminAccountOpen]);
   const publicWorks = visibleWorks(works);
   const categories = [
     ...new Set([
@@ -336,6 +341,32 @@ export default function Catalog() {
       )
     : publicWorks;
   const filtered = filterWorks(source, query, category, sort);
+  const mainContact = contactLinks(settings)[0];
+  function navigateAccount(show: boolean) {
+    const url = new URL(window.location.href);
+    if (show) url.searchParams.set("account", "admin");
+    else url.searchParams.delete("account");
+    url.searchParams.delete("work");
+    url.searchParams.delete("variant");
+    url.hash = "";
+    history.pushState({ catalogRoute: true, version: 2, dialogDepth: 0 }, "", url.href);
+    setAdminAccountOpen(show);
+    setSelected(null);
+    setSelectedVariantId(null);
+    setLightboxOpen(false);
+    setAccountOpen(false);
+    if (accountMenu.current) accountMenu.current.open = false;
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  function openAccountWork(id: string) {
+    const work = works.find((item) => item.id === id);
+    if (!work) {
+      setNotice("Работа больше недоступна. Обновите каталог.");
+      return;
+    }
+    setEditingEnabled(true);
+    open(work);
+  }
   function updateCatalogUrl(workId: string | null, variantId: string | null, action: "push" | "replace") {
     const url = new URL(window.location.href);
     if (workId) url.hash = "";
@@ -428,6 +459,7 @@ export default function Catalog() {
       setFavoriteIds(new Set());
       setFavoriteNotice(null);
       setAccountOpen(false);
+      if (adminAccountOpen) navigateAccount(false);
       setEditingEnabled(true);
       setWorks((items) => visibleWorks(items));
       closeWork();
@@ -484,8 +516,8 @@ export default function Catalog() {
       ref={motionRoot}
       className={"studio-shell" + (motionPaused ? " motion-paused" : "")}
     >
-      <header className="header">
-        <a className="brand" href="#">
+      <header className={"header" + (adminAccountOpen ? " account-header" : "")}>
+        <a className="brand" href={adminAccountOpen ? import.meta.env.BASE_URL : "#"} onClick={adminAccountOpen ? (event) => { event.preventDefault(); navigateAccount(false); } : undefined}>
           <span className="brand-symbol">
             <Flower2 size={26} />
           </span>
@@ -494,7 +526,7 @@ export default function Catalog() {
             <small>ДЕКОР С ХАРАКТЕРОМ</small>
           </span>
         </a>
-        <nav>
+        <nav hidden={adminAccountOpen}>
           <a href="#catalog">Коллекция</a>
           <a href="#story">О мастерской</a>
         </nav>
@@ -527,11 +559,10 @@ export default function Catalog() {
                 type="button"
                 disabled={signingOut}
                 onClick={() => {
-                  setSettingsSection("general");
-                  if (accountMenu.current) accountMenu.current.open = false;
+                  navigateAccount(true);
                 }}
               >
-                <Settings2 size={16} />Настройки сайта
+                <UserRound size={16} />Личный кабинет
               </button>
               <button type="button" disabled={signingOut} onClick={() => void logout()}>
                 <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
@@ -559,6 +590,28 @@ export default function Catalog() {
           </button>
         )}
       </header>
+      {adminAccountOpen ? (
+        admin ? <Suspense fallback={<main className="account-access" role="status">Загружаем личный кабинет…</main>}>
+          <AdminAccount
+            email={userEmail}
+            onBack={() => navigateAccount(false)}
+            onOpenWork={openAccountWork}
+            settingsForm={<SettingsEditor embedded settings={settings} section="general" onClose={() => navigateAccount(false)} onSaved={(next) => {
+              setSettings(next);
+              setNotice("Настройки сохранены");
+            }} />}
+          />
+        </Suspense> : <main className="account-access">
+          <h1>Личный кабинет</h1>
+          {loading ? <p role="status">Проверяем доступ…</p> : <>
+            <p>{error || (userEmail ? "Этот раздел доступен только администратору." : "Войдите в аккаунт администратора, чтобы увидеть статистику и настройки сайта.")}</p>
+            <div className="account-access-actions">
+              {!userEmail && <button className="button primary" type="button" onClick={() => setLoginOpen(true)}>Войти</button>}
+              <button className="button secondary" type="button" onClick={() => navigateAccount(false)}>На сайт</button>
+            </div>
+          </>}
+        </main>
+      ) : <>
       <TreeHero
         works={works}
         ornaments={ornaments}
@@ -834,11 +887,11 @@ export default function Catalog() {
                 <span>Ваше настроение</span>
                 <span>Живые детали</span>
               </div>
-              {settings.contact ? (
+              {mainContact ? (
                 <a
                   className="button primary"
-                  href={settings.contact}
-                  target="_blank"
+                  href={mainContact.href}
+                  target={mainContact.phone ? undefined : "_blank"}
                   rel="noreferrer"
                 >
                   Обсудить свою историю <ArrowUpRight size={18} />
@@ -848,6 +901,7 @@ export default function Catalog() {
                   Контакт мастера появится здесь после настройки.
                 </p>
               )}
+              <ContactLinks settings={settings} />
             </div>
           </div>
           <div className="story-signature" aria-hidden="true">
@@ -876,6 +930,7 @@ export default function Catalog() {
           </small>
         </div>
       </footer>
+      </>}
       {favoriteNotice && !selected ? (
         <div className={"toast" + (favoriteNotice.error ? " toast-error" : "")} role={favoriteNotice.error ? "alert" : "status"}>
           {!favoriteNotice.error && <Check size={19} />}
@@ -1028,16 +1083,17 @@ export default function Catalog() {
                   )}
                 </div>
               )}
-              {settings.contact ? (
+              {mainContact ? (
                 <a
-                  href={settings.contact}
-                  target="_blank"
+                  href={mainContact.href}
+                  target={mainContact.phone ? undefined : "_blank"}
                   rel="noreferrer"
                   className="button primary"
                 >
                   Обсудить с мастером <ArrowUpRight size={18} />
                 </a>
               ) : null}
+              <ContactLinks settings={settings} />
               {canEdit && (
                 <button
                   className="button secondary"
@@ -1411,14 +1467,19 @@ function SettingsEditor({
   section,
   onClose,
   onSaved,
+  embedded = false,
 }: {
   settings: Settings;
   section: "general" | "categories";
   onClose: () => void;
   onSaved: (s: Settings) => void;
+  embedded?: boolean;
 }) {
   const [name, setName] = useState(settings.name),
     [contact, setContact] = useState(settings.contact),
+    [vk, setVk] = useState(settings.vk),
+    [telegram, setTelegram] = useState(settings.telegram),
+    [phone, setPhone] = useState(settings.phone),
     [categories, setCategories] = useState<CategoryDraft[]>(settings.categories.map((name) => ({ key: crypto.randomUUID(), original: name, name }))),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -1463,6 +1524,9 @@ function SettingsEditor({
         savedSettings = await saveSettings({
           name,
           contact,
+          vk,
+          telegram,
+          phone,
           categories: settings.categories,
           categoryRevision: settings.categoryRevision,
         });
@@ -1474,19 +1538,14 @@ function SettingsEditor({
       setBusy(false);
     }
   }
-  return (
-    <Modal
-      title={section === "categories" ? "Категории каталога" : "Настройки сайта"}
-      onClose={() => {
-        if (!busy) onClose();
-      }}
-    >
+  const form = (
       <form className="editor-form" onSubmit={submit}>
         {section === "general" ? (
           <>
-            <label>
+            <label htmlFor="site-name">
               Название мастерской
               <input
+                id="site-name"
                 value={name}
                 required
                 maxLength={80}
@@ -1494,18 +1553,32 @@ function SettingsEditor({
                 disabled={busy}
               />
             </label>
-            <label>
-              Ссылка для связи
+            <label htmlFor="site-instagram">
+              Instagram
               <input
+                id="site-instagram"
                 type="url"
-                placeholder="https://t.me/имя"
+                maxLength={300}
+                placeholder="https://www.instagram.com/имя"
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
                 disabled={busy}
               />
             </label>
+            <label htmlFor="site-vk">
+              ВКонтакте
+              <input id="site-vk" type="url" maxLength={300} placeholder="https://vk.com/имя" value={vk} onChange={(e) => setVk(e.target.value)} disabled={busy} />
+            </label>
+            <label htmlFor="site-telegram">
+              Telegram
+              <input id="site-telegram" type="url" maxLength={300} placeholder="https://t.me/имя" value={telegram} onChange={(e) => setTelegram(e.target.value)} disabled={busy} />
+            </label>
+            <label htmlFor="site-phone">
+              Номер телефона
+              <input id="site-phone" type="tel" autoComplete="tel" maxLength={40} placeholder="+7 (999) 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} />
+            </label>
             <p className="hint">
-              Telegram, VK или Instagram. Ссылка появится в карточках работ.
+              Все контакты необязательные. Укажите полные ссылки на социальные сети. Заполненные контакты появятся в карточках работ и разделе «О мастерской».
             </p>
           </>
         ) : (
@@ -1577,19 +1650,26 @@ function SettingsEditor({
           </p>
         )}
         <div className="form-footer">
-          <button
+          {!embedded && <button
             type="button"
             className="button secondary"
             disabled={busy}
             onClick={onClose}
           >
             Отмена
-          </button>
+          </button>}
           <button className="button primary" disabled={busy}>
             {busy ? "Сохраняем…" : "Сохранить"}
           </button>
         </div>
       </form>
+  );
+  return embedded ? form : (
+    <Modal
+      title={section === "categories" ? "Категории каталога" : "Настройки сайта"}
+      onClose={() => { if (!busy) onClose(); }}
+    >
+      {form}
     </Modal>
   );
 }

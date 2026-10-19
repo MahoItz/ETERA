@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import type { Measurements } from "../lib/measurements";
 import { defaults, type Settings, type Variant, type Work } from "../lib/model";
+import { normalizeContacts } from "../lib/contacts";
 import { supabase } from "./supabase";
 import type { TreeOrnament } from "./tree-items";
 import { WorkSaveError, type WorkSaveRequest } from "./work-save";
@@ -94,7 +95,7 @@ export async function loadCatalog(): Promise<{
       .order("updated_at", { ascending: false }),
     supabase
       .from("site_settings")
-      .select("name, contact")
+      .select("name, contact, vk, telegram, phone")
       .eq("id", true)
       .maybeSingle(),
     supabase.from("categories").select("name").order("position").order("name"),
@@ -112,6 +113,9 @@ export async function loadCatalog(): Promise<{
     settings: {
       name: settingsResult.data?.name ?? defaults.name,
       contact: settingsResult.data?.contact ?? "",
+      vk: settingsResult.data?.vk ?? "",
+      telegram: settingsResult.data?.telegram ?? "",
+      phone: settingsResult.data?.phone ?? "",
       categories: (categoriesResult.data ?? []).map((c) => c.name),
       categoryRevision: categoryStateResult.data?.revision ?? defaults.categoryRevision,
     },
@@ -261,18 +265,21 @@ export async function saveCategories(categories: CategoryDraft[], expectedRevisi
 }
 
 export async function saveSettings(input: Settings): Promise<Settings> {
+  const contacts = normalizeContacts(input);
   const names = [
     ...new Set(input.categories.map((name) => name.trim()).filter(Boolean)),
   ];
   const result = await supabase
     .from("site_settings")
-    .update({ name: input.name.trim(), contact: input.contact.trim() })
-    .eq("id", true);
+    .update({ name: input.name.trim(), ...contacts })
+    .eq("id", true)
+    .select("id")
+    .single();
   fail(result.error);
   for (const name of names) await categoryId(name);
   return {
     name: input.name.trim(),
-    contact: input.contact.trim(),
+    ...contacts,
     categories: names,
     categoryRevision: input.categoryRevision,
   };
