@@ -907,11 +907,7 @@ export default function Catalog() {
                 >
                   Обсудить с мастером <ArrowUpRight size={18} />
                 </a>
-              ) : (
-                <p className="contact-unset">
-                  Контакт можно добавить в настройках редактора.
-                </p>
-              )}
+              ) : null}
               {canEdit && (
                 <button
                   className="button secondary"
