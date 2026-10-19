@@ -77,7 +77,7 @@ const money = (n: number | null) =>
     ? "Цена по запросу"
     : new Intl.NumberFormat("ru-RU").format(n) + " ₽";
 const labels = { available: "В наличии", order: "Под заказ", sold: "Продано" };
-type CatalogHistoryState = { catalogRoute?: true; entry?: boolean; dialogDepth?: number };
+type CatalogHistoryState = { catalogRoute?: true; version?: 2; dialogDepth?: number };
 
 function catalogLocation() {
   const url = new URL(window.location.href);
@@ -200,9 +200,15 @@ export default function Catalog() {
       setSelectedVariantId(work?.variants.find((variant) => variant.slug === variantId || variant.id === variantId)?.id ?? null);
     };
     const current = history.state as CatalogHistoryState | null;
-    if (!current?.catalogRoute) {
-      const { workId, variantId } = catalogLocation();
-      history.replaceState({ catalogRoute: true, entry: true, dialogDepth: variantId ? 2 : workId ? 1 : 0 }, "", window.location.href);
+    if (!current?.catalogRoute || current.version !== 2) {
+      const originalUrl = window.location.href;
+      const { workId } = catalogLocation();
+      const catalogUrl = new URL(originalUrl);
+      catalogUrl.searchParams.delete("work");
+      catalogUrl.searchParams.delete("variant");
+      // A shared product URL also needs a catalogue entry to close back to.
+      history.replaceState({ catalogRoute: true, version: 2, dialogDepth: 0 }, "", catalogUrl.href);
+      if (workId) history.pushState({ catalogRoute: true, version: 2, dialogDepth: 1 }, "", originalUrl);
     }
     applyLocation();
     window.addEventListener("popstate", applyLocation);
@@ -336,11 +342,14 @@ export default function Catalog() {
     else url.searchParams.delete("work");
     if (workId && variantId) url.searchParams.set("variant", variantId);
     else url.searchParams.delete("variant");
+    if (url.href === window.location.href) return;
     const current = history.state as CatalogHistoryState | null;
     const state: CatalogHistoryState = {
       catalogRoute: true,
-      entry: Boolean(current?.catalogRoute && current.entry && (action === "replace" || current.dialogDepth)),
-      dialogDepth: variantId ? 2 : workId ? 1 : 0,
+      version: 2,
+      // Count actual pushed entries, not the number of URL parameters.
+      // Replacing a photo or variant does not remove earlier history entries.
+      dialogDepth: workId ? (current?.dialogDepth ?? 0) + (action === "push" ? 1 : 0) : 0,
     };
     if (action === "push") history.pushState(state, "", `${url.pathname}${url.search}${url.hash}`);
     else history.replaceState(state, "", `${url.pathname}${url.search}${url.hash}`);
@@ -355,13 +364,13 @@ export default function Catalog() {
   }
   function closeWork() {
     const current = history.state as CatalogHistoryState | null;
-    if (current?.catalogRoute && !current.entry && current.dialogDepth) {
-      history.go(-current.dialogDepth);
-      return;
-    }
     setLightboxOpen(false);
     setSelected(null);
     setSelectedVariantId(null);
+    if (current?.catalogRoute && current.version === 2 && current.dialogDepth) {
+      history.go(-current.dialogDepth);
+      return;
+    }
     updateCatalogUrl(null, null, "replace");
   }
   function selectVariant(variantId: string | null, action: "push" | "replace" = "push") {

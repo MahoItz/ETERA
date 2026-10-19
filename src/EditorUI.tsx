@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 type PageScrollLock = {
@@ -39,12 +39,14 @@ function lockPageScroll() {
     const { x, y, bodyCssText } = pageScrollLock;
     document.body.style.cssText = bodyCssText;
     pageScrollLock = null;
-    window.scrollTo(x, y);
+    // The site's smooth anchor scrolling must not animate modal restoration.
+    window.scrollTo({ left: x, top: y, behavior: "instant" });
   };
 }
 
 export function usePageScrollLock() {
-  useEffect(() => lockPageScroll(), []);
+  // Freeze and restore the background before the browser can paint a frame.
+  useLayoutEffect(() => lockPageScroll(), []);
 }
 
 export const imageUrl = (url: string) =>
@@ -67,7 +69,7 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   usePageScrollLock();
-  useEffect(() => {
+  useLayoutEffect(() => {
     const d = ref.current;
     d?.showModal();
     return () => d?.close();
