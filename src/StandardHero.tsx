@@ -107,10 +107,12 @@ export function StandardHero({ works, ready, loading, onOpen, stopMotion }: {
             </button>;
           })}
           {!count && <div className="standard-carousel-empty" role="status"><Flower2 size={48} strokeWidth={1} aria-hidden="true" /><span>{loading ? "Знакомимся с работами…" : "Здесь начинается новая история"}</span><p>{loading ? "Совсем скоро покажем вам маленькие радости." : "Загляните в коллекцию — красота в деталях."}</p></div>}
+          {count > 1 && <>
+            <button className="standard-carousel-arrow is-previous" type="button" onClick={() => turn(-1)} aria-label="Предыдущая работа" aria-controls="standard-carousel-stage"><ArrowLeft /></button>
+            <button className="standard-carousel-arrow is-next" type="button" onClick={() => turn(1)} aria-label="Следующая работа" aria-controls="standard-carousel-stage"><ArrowRight /></button>
+          </>}
         </div>
         {count > 1 && <>
-          <button className="standard-carousel-arrow is-previous" type="button" onClick={() => turn(-1)} aria-label="Предыдущая работа" aria-controls="standard-carousel-stage"><ArrowLeft /></button>
-          <button className="standard-carousel-arrow is-next" type="button" onClick={() => turn(1)} aria-label="Следующая работа" aria-controls="standard-carousel-stage"><ArrowRight /></button>
           <div className="standard-carousel-controls">
             <div className="standard-carousel-dots" role="group" aria-label="Выбрать карточку">
               {items.map((work, index) => <button key={work.id} type="button" onClick={() => setActiveId(work.id)} aria-label={`Карточка ${index + 1}: ${work.title}`} aria-pressed={active === index}><span /></button>)}
