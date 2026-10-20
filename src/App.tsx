@@ -39,9 +39,6 @@ import {
   Eye,
   LogOut,
   MessageCircle,
-  LockKeyhole,
-  Pause,
-  Play,
   Plus,
   Pencil,
   Search,
@@ -148,7 +145,6 @@ export default function Catalog() {
   const [favoriteNotice, setFavoriteNotice] = useState<{
     workId: string; message: string; error: boolean;
   } | null>(null);
-  const [motionPaused, setMotionPaused] = useState(false);
   const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
   const [treeEditor, setTreeEditor] = useState(false);
   const [works, setWorks] = useState<Work[]>([]),
@@ -304,7 +300,6 @@ export default function Catalog() {
   }, [selectedPhotos.length, lightboxOpen, messagesOpen, loginOpen]);
   useEffect(() => {
     if (
-      motionPaused ||
       !motionRoot.current ||
       !("IntersectionObserver" in window)
     )
@@ -341,7 +336,7 @@ export default function Catalog() {
       media.removeEventListener("change", reduce);
       for (const el of elements) el.classList.remove("reveal-pending");
     };
-  }, [loading, canEdit, query, category, sort, scope, limit, motionPaused, adminAccountOpen]);
+  }, [loading, canEdit, query, category, sort, scope, limit, adminAccountOpen]);
   const publicWorks = visibleWorks(works);
   const categories = [
     ...new Set([
@@ -562,7 +557,7 @@ export default function Catalog() {
     <AdminModeContext value={admin}>
     <div
       ref={motionRoot}
-      className={"studio-shell" + (motionPaused ? " motion-paused" : "")}
+      className="studio-shell"
     >
       <AdminModeIndicator />
       <header className={"header" + (adminAccountOpen ? " account-header" : "")}>
@@ -674,14 +669,14 @@ export default function Catalog() {
         ornaments={ornaments}
         ready={!loading && !error}
         onOpen={open}
-        stopMotion={motionPaused || selected !== null || treeEditor}
+        stopMotion={selected !== null || treeEditor}
         editorActions={canEdit ? (
           <button className="button secondary" onClick={() => setTreeEditor(true)}>
             <Settings2 size={16} />Управление украшениями
           </button>
         ) : undefined}
       /> : <StandardHero works={works} ready={!loading && !error} loading={loading} onOpen={open}
-        stopMotion={motionPaused || selected !== null || loginOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
+        stopMotion={selected !== null || loginOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
@@ -902,7 +897,7 @@ export default function Catalog() {
             </p>
           </div>
       </main>
-        <section id="story" className="story">
+        <section id="story" className="story" aria-labelledby="story-heading">
           <div className="story-top" data-reveal>
             <div className="eyebrow">02 / ТЕПЛО РУЧНОЙ РАБОТЫ</div>
             <span>Маленькая мастерская. Свой большой мир.</span>
@@ -926,11 +921,10 @@ export default function Catalog() {
                 aria-hidden="true"
               />
             </div>
-            <div className="story-copy" data-reveal>
-              <h2>
-                Не просто декор.
-                <br />
-                <em>Маленькое чувство.</em>
+            <div className="story-copy">
+              <h2 id="story-heading">
+                <span className="story-heading-line" data-reveal>Не просто декор.</span>{" "}
+                <span className="story-heading-line" data-reveal><em>Маленькое чувство.</em></span>
               </h2>
               <p>
                 Небольшие вещи, в которых остаётся тепло рук. Гипс, кисти,
@@ -948,31 +942,15 @@ export default function Catalog() {
               <MasterContacts settings={settings} showEmpty />
             </div>
           </div>
-          <div className="story-signature" aria-hidden="true">
-            сделано с душой<span>✧</span>
+          <div className="story-signature" aria-hidden="true" data-reveal>
+            <span className="story-signature-star">✧</span>
+            <span className="story-signature-text">Сделано с душой</span>
+            <span className="story-signature-star">✧</span>
           </div>
         </section>
 
-      <footer>
-        <a className="footer-brand" href="#">
-          <Flower2 size={23} />
-          {settings.name}
-        </a>
-        <span>Маленькие вещи. Большое тепло.</span>
-        <div className="footer-controls">
-          <button
-            className="motion-toggle"
-            onClick={() => setMotionPaused((v) => !v)}
-            aria-pressed={motionPaused}
-          >
-            {motionPaused ? <Play size={12} /> : <Pause size={12} />}Анимации:{" "}
-            {motionPaused ? "выкл" : "вкл"}
-          </button>
-          <small>
-            <LockKeyhole size={12} />
-            Приватный просмотр
-          </small>
-        </div>
+      <footer className="site-footer">
+        <small className="footer-copyright">© {new Date().getFullYear()} {settings.name}</small>
       </footer>
       </>}
       {favoriteNotice && !selected ? (
