@@ -41,12 +41,6 @@
 .winter-dust i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #ffdaa6; box-shadow: 0 0 12px 3px #ffc78577; animation: winter-twinkle 5s ease-in-out infinite alternate; }
 .winter-dust i:nth-child(4n) { width: 30px; height: 30px; filter: blur(9px); opacity: .2; }
 @keyframes winter-twinkle { from { opacity: .2; } to { opacity: .85; } }
-.winter-values { display: flex; justify-content: center; background: #d9c2e9; padding: 26px var(--gutter); gap: 0; margin-top: 10px; border-radius: 50% 50% 45% 45% / 9% 9% 8% 8%; }
-.winter-values > div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 23px; max-width: 420px; }
-.winter-values > div + div { border-left: 1px solid #b68caf80; }
-.winter-values svg { width: 28px; height: 28px; stroke-width: 1.2; }
-.winter-values span { font-size: 10px; letter-spacing: 2.5px; }
-.winter-values small { display: block; margin-top: 8px; font-size: 8px; letter-spacing: 3px; color: #886980; }
 .tree-image-editor { padding: 20px; background: #eee0ef; border: 1px solid #d5b9d1; border-radius: 14px; margin-bottom: 20px; }
 .tree-image-editor h3 { margin-bottom: 10px; font-size: 22px; }
 .tree-image-editor label { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -71,11 +65,6 @@
   .winter-hero { border-radius: 0 0 32px 32px; }
   .winter-copy p { font-size: 16px; }
   .winter-eyebrow { margin-bottom: 22px; gap: 9px; font-size: 8px; letter-spacing: 1.8px; }
-  .winter-values { padding: 22px 14px; }
-  .winter-values > div { gap: 8px; flex-direction: column; text-align: center; }
-  .winter-values span { font-size: 7px; letter-spacing: 1px; }
-  .winter-values small { font-size: 6px; letter-spacing: 1px; }
-  .winter-values svg { width: 22px; height: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { .winter-dust i, .tree-lights i { animation: none; } .winter-hero *, .winter-hero *::after { transition: none !important; } }
 .motion-paused .winter-dust i, .motion-paused .tree-lights i { animation-play-state: paused; }

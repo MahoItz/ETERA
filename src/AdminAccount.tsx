@@ -66,7 +66,7 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
           {section === "messages" ? messages : section === "settings" ? (
             <section className="account-surface account-settings" aria-labelledby="account-settings-heading">
               <h2 id="account-settings-heading">Настройки сайта</h2>
-              <p className="form-intro">Название мастерской, социальные сети и номер телефона для связи с вами.</p>
+              <p className="form-intro">Название мастерской, оформление шапки и контакты для связи с вами.</p>
               {settingsForm}
             </section>
           ) : (

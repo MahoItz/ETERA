@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import { ArrowUpRight, Sparkles, Flower2, Heart, Gift } from "lucide-react";
+import { ArrowUpRight, Sparkles } from "lucide-react";
+import { HeroValues } from "./HeroValues";
 import { CatalogImage } from "./CatalogImage";
 import { visibleWorks, type Work } from "../lib/model";
 import "./tree-hero.css";
@@ -185,6 +186,6 @@ export function TreeHero({ works, ornaments, ready, onOpen, stopMotion, editorAc
         {editorActions && <div className="tree-editor-actions" role="group" aria-label="Управление украшениями">{editorActions}</div>}
       </div>
     </section>
-    <div className="winter-values"><div><Flower2 /><span>РУЧНАЯ РАБОТА<small>С ЛЮБОВЬЮ</small></span></div><div><Gift /><span>МАЛЕНЬКИЕ РАДОСТИ<small>БОЛЬШИЕ ЧУВСТВА</small></span></div><div><Heart /><span>ДЛЯ ВАШЕГО ДОМА<small>И ОСОБЫХ МОМЕНТОВ</small></span></div></div>
+    <HeroValues />
   </>;
 }

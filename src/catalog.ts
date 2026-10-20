@@ -95,7 +95,7 @@ export async function loadCatalog(): Promise<{
       .order("updated_at", { ascending: false }),
     supabase
       .from("site_settings")
-      .select("name, contact, vk, telegram, phone")
+      .select("name, contact, vk, telegram, phone, hero_mode")
       .eq("id", true)
       .maybeSingle(),
     supabase.from("categories").select("name").order("position").order("name"),
@@ -116,6 +116,7 @@ export async function loadCatalog(): Promise<{
       vk: settingsResult.data?.vk ?? "",
       telegram: settingsResult.data?.telegram ?? "",
       phone: settingsResult.data?.phone ?? "",
+      heroMode: settingsResult.data?.hero_mode === "new-year" ? "new-year" : defaults.heroMode,
       categories: (categoriesResult.data ?? []).map((c) => c.name),
       categoryRevision: categoryStateResult.data?.revision ?? defaults.categoryRevision,
     },
@@ -265,13 +266,14 @@ export async function saveCategories(categories: CategoryDraft[], expectedRevisi
 }
 
 export async function saveSettings(input: Settings): Promise<Settings> {
+  if (input.heroMode !== "standard" && input.heroMode !== "new-year") throw new Error("Выберите режим шапки сайта");
   const contacts = normalizeContacts(input);
   const names = [
     ...new Set(input.categories.map((name) => name.trim()).filter(Boolean)),
   ];
   const result = await supabase
     .from("site_settings")
-    .update({ name: input.name.trim(), ...contacts })
+    .update({ name: input.name.trim(), ...contacts, hero_mode: input.heroMode })
     .eq("id", true)
     .select("id")
     .single();
@@ -280,6 +282,7 @@ export async function saveSettings(input: Settings): Promise<Settings> {
   return {
     name: input.name.trim(),
     ...contacts,
+    heroMode: input.heroMode,
     categories: names,
     categoryRevision: input.categoryRevision,
   };

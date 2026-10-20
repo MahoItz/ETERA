@@ -12,6 +12,7 @@ import { SizeDiagram } from "./SizeDiagram";
 import { variantPhotos } from "../lib/variant-gallery";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
 import { TreeHero } from "./TreeHero";
+import { StandardHero } from "./StandardHero";
 import { treeItems, type TreeOrnament } from "./tree-items";
 import { useOrnamentSort } from "./useOrnamentSort";
 import {
@@ -668,7 +669,7 @@ export default function Catalog() {
           </>}
         </main>
       ) : <>
-      <TreeHero
+      {settings.heroMode === "new-year" ? <TreeHero
         works={works}
         ornaments={ornaments}
         ready={!loading && !error}
@@ -679,7 +680,8 @@ export default function Catalog() {
             <Settings2 size={16} />Управление украшениями
           </button>
         ) : undefined}
-      />
+      /> : <StandardHero works={works} ready={!loading && !error} loading={loading} onOpen={open}
+        stopMotion={motionPaused || selected !== null || loginOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
@@ -1470,6 +1472,7 @@ function SettingsEditor({
     [vk, setVk] = useState(settings.vk),
     [telegram, setTelegram] = useState(settings.telegram),
     [phone, setPhone] = useState(settings.phone),
+    [heroMode, setHeroMode] = useState(settings.heroMode),
     [categories, setCategories] = useState<CategoryDraft[]>(settings.categories.map((name) => ({ key: crypto.randomUUID(), original: name, name }))),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -1517,6 +1520,7 @@ function SettingsEditor({
           vk,
           telegram,
           phone,
+          heroMode,
           categories: settings.categories,
           categoryRevision: settings.categoryRevision,
         });
@@ -1543,6 +1547,14 @@ function SettingsEditor({
                 disabled={busy}
               />
             </label>
+            <label htmlFor="site-hero-mode">
+              Режим шапки
+              <select id="site-hero-mode" value={heroMode} onChange={(e) => setHeroMode(e.target.value as Settings["heroMode"])} disabled={busy} aria-describedby="site-hero-mode-hint">
+                <option value="standard">Обычный — карусель карточек</option>
+                <option value="new-year">Новогодний — ёлка с украшениями</option>
+              </select>
+            </label>
+            <p id="site-hero-mode-hint" className="hint">Режим применяется для всех посетителей после сохранения. В обычной шапке показываются опубликованные работы с фотографиями, сначала — избранные.</p>
             <label htmlFor="site-instagram">
               Instagram
               <input
