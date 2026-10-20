@@ -328,8 +328,15 @@ export async function signIn(email: string, password: string) {
   return result.data.session;
 }
 
-export async function signUp(email: string, password: string) {
-  const result = await supabase.auth.signUp({ email, password });
+export async function signUp(email: string, password: string, nickname: string) {
+  const trimmedNickname = nickname.trim();
+  if (!trimmedNickname) throw new Error("Укажите никнейм.");
+  if (trimmedNickname.length > 30) throw new Error("Никнейм должен быть не длиннее 30 символов.");
+  const result = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { nickname: trimmedNickname } },
+  });
   fail(result.error);
   return result.data;
 }

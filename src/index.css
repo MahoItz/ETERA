@@ -43,6 +43,8 @@ img { display: block; max-width: 100%; }
 h1, h2, h3, p { margin-top: 0; }
 h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .studio-shell { overflow-x: clip; }
+.admin-mode-indicator { position: fixed; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 100; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #ccb1bb; border-radius: 50%; background: var(--ink); color: var(--paper); box-shadow: 0 4px 14px #3d293c30; pointer-events: none; }
+.studio-shell:has(dialog[open]) > .admin-mode-indicator { visibility: hidden; }
 ::selection { background: #e1b9dd; color: var(--ink); }
 .header { padding: 24px var(--gutter); display: flex; gap: 36px; align-items: center; }
 .brand { display: flex; align-items: center; gap: 13px; font-family: var(--serif); font-size: 27px; letter-spacing: -.8px; }
@@ -61,6 +63,8 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .admin-toggle.active { background: var(--ink); color: var(--paper); }
 .account-menu { position: relative; flex-shrink: 0; }
 .account-menu > summary { cursor: pointer; list-style: none; }
+.account-menu > summary > span { max-width: clamp(64px, 18vw, 180px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu > summary > svg { flex-shrink: 0; }
 .account-menu > summary::-webkit-details-marker { display: none; }
 .account-menu > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
 .account-panel { position: absolute; top: calc(100% + 12px); right: 0; z-index: 60; width: min(290px, calc(100vw - 40px)); padding: 10px; background: #f8ece5; border: 1px solid #d8bccf; border-radius: 16px; box-shadow: 0 14px 40px #3d293c26; }

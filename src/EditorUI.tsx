@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { AdminModeIndicator } from "./AdminModeIndicator";
 
 type PageScrollLock = {
   count: number;
@@ -61,11 +62,13 @@ export function Modal({
   onClose,
   children,
   wide = false,
+  variant = "default",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  variant?: "default" | "product";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   usePageScrollLock();
@@ -77,7 +80,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={"modal " + (wide ? "wide" : "")}
+      className={"modal " + (wide ? "wide" : "") + (variant === "product" ? " product-modal" : "")}
       onCancel={(e) => {
         // File inputs also emit cancel when their native picker is dismissed.
         if (e.target !== e.currentTarget) return;
@@ -89,13 +92,14 @@ export function Modal({
       }}
       aria-label={title}
     >
-      <div className="modal-head">
-        <h2>{title}</h2>
+      <div className={variant === "product" ? "product-modal-close" : "modal-head"}>
+        {variant !== "product" && <h2>{title}</h2>}
         <button className="icon-button" onClick={onClose} aria-label="Закрыть">
           <X size={22} />
         </button>
       </div>
       {children}
+      <AdminModeIndicator />
     </dialog>
   );
 }

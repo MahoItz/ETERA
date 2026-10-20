@@ -3,12 +3,12 @@ import { ArrowUpRight, Camera, MessageCircle, Phone, Send } from "lucide-react";
 import { contactLinks } from "../lib/contacts";
 import type { Settings } from "../lib/model";
 
-export function MasterContacts({ settings, showEmpty = false, children }: { settings: Settings; showEmpty?: boolean; children?: ReactNode }) {
+export function MasterContacts({ settings, showEmpty = false, compact = false, children }: { settings: Settings; showEmpty?: boolean; compact?: boolean; children?: ReactNode }) {
   const headingId = useId();
   const links = contactLinks(settings);
   if (!links.length && !showEmpty && !children) return null;
-  return <section className={"master-contacts" + (children ? " has-chat" : "")} aria-labelledby={headingId}>
-    <h3 id={headingId}>Связаться с мастером</h3>
+  return <section className={"master-contacts" + (children ? " has-chat" : "") + (compact ? " is-editorial" : "")} aria-labelledby={compact ? undefined : headingId} aria-label={compact ? "Связаться с мастером" : undefined}>
+    {!compact && <h3 id={headingId}>Связаться с мастером</h3>}
     {children}
     {links.length ? <>
       <p className={children ? "chat-alternatives" : undefined}>{children ? "Другие способы связи" : "Выберите удобный способ связи."}</p>

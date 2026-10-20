@@ -1,10 +1,13 @@
 import { CatalogImage } from "./CatalogImage";
+import { ProductGallery } from "./ProductGallery";
+import { AdminModeContext, AdminModeIndicator } from "./AdminModeIndicator";
 import { MasterContacts } from "./MasterContacts";
 import { WorkChat } from "./WorkChat";
 import { ChatInbox } from "./ChatInbox";
 import { ChatNotifications } from "./ChatNotifications";
 import { useChatInbox } from "./useChatInbox";
 import "./chat.css";
+import "./product-detail.css";
 import { SizeDiagram } from "./SizeDiagram";
 import { variantPhotos } from "../lib/variant-gallery";
 import { Modal, UnsavedChangesDialog, imageUrl, compressPhoto } from "./EditorUI";
@@ -24,7 +27,6 @@ const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ d
 const WorkEditor = lazy(() => import("./WorkEditor").then((module) => ({ default: module.WorkEditor })));
 const AdminAccount = lazy(() => import("./AdminAccount").then((module) => ({ default: module.AdminAccount })));
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -33,7 +35,6 @@ import {
   GripVertical,
   ImagePlus,
   Images,
-  Maximize2,
   Eye,
   LogOut,
   MessageCircle,
@@ -157,6 +158,7 @@ export default function Catalog() {
   const [admin, setAdmin] = useState(false),
     [userId, setUserId] = useState<string | null>(null),
     [userEmail, setUserEmail] = useState<string | null>(null),
+    [userNickname, setUserNickname] = useState(""),
     [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set()),
     [favoriteBusy, setFavoriteBusy] = useState<string | null>(null),
     [accountOpen, setAccountOpen] = useState(false),
@@ -203,6 +205,8 @@ export default function Catalog() {
       setSettings(data.settings);
       setAdmin(Boolean(adminSession));
       setUserEmail(currentSession?.user.email ?? null);
+      const nickname = currentSession?.user.user_metadata.nickname;
+      setUserNickname(typeof nickname === "string" ? nickname.trim() : "");
       setUserId(currentSession?.user.id ?? null);
       setFavoriteIds(favorites);
     } catch (e) {
@@ -451,6 +455,12 @@ export default function Catalog() {
       (index + selectedPhotos.length + direction) % selectedPhotos.length,
     );
   }
+  function contactMaster() {
+    if (!selected) return;
+    setMessageWork({ id: selected.id, title: selected.title });
+    setSelectedThreadId(null);
+    setMessagesOpen(true);
+  }
   function saved(w: Work) {
     setWorks((list) => [w, ...list.filter((x) => x.id !== w.id)]);
     setScope(
@@ -487,6 +497,7 @@ export default function Catalog() {
       await signOut();
       setAdmin(false);
       setUserEmail(null);
+      setUserNickname("");
       setUserId(null);
       setMessagesOpen(false);
       setMessageWork(null);
@@ -547,10 +558,12 @@ export default function Catalog() {
     }
   }
   return (
+    <AdminModeContext value={admin}>
     <div
       ref={motionRoot}
       className={"studio-shell" + (motionPaused ? " motion-paused" : "")}
     >
+      <AdminModeIndicator />
       <header className={"header" + (adminAccountOpen ? " account-header" : "")}>
         <a className="brand" href={adminAccountOpen ? import.meta.env.BASE_URL : "#"} onClick={adminAccountOpen ? (event) => { event.preventDefault(); navigateAccount(false); } : undefined}>
           <span className="brand-symbol">
@@ -584,7 +597,7 @@ export default function Catalog() {
             }}
           >
             <summary className="admin-toggle">
-              <UserRound size={16} /><span>Аккаунт</span><ChevronDown size={13} />
+              <UserRound size={16} /><span>Админ</span><ChevronDown size={13} />
             </summary>
             <div className="account-panel">
               <span className="account-caption">Администратор</span>
@@ -609,7 +622,7 @@ export default function Catalog() {
           </details>
         ) : userEmail ? (
           <details className="account-menu" ref={accountMenu}>
-            <summary className="admin-toggle"><UserRound size={16} /><span>Аккаунт</span><ChevronDown size={13} /></summary>
+            <summary className="admin-toggle"><UserRound size={16} /><span title={userNickname || undefined}>{userNickname || "Аккаунт"}</span><ChevronDown size={13} /></summary>
             <div className="account-panel">
               <span className="account-caption">{userEmail}</span>
               <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}>
@@ -972,62 +985,26 @@ export default function Catalog() {
         </div>
       )}
       {selected && (
-        <Modal title={selected.title} onClose={closeWork} wide>
+        <Modal title={selected.title} onClose={closeWork} wide variant="product">
           <div className="detail">
-            <div className="gallery">
-              <div className="gallery-main">
-                {selectedPhotos[photoIndex] ? (
-                  <button
-                    type="button"
-                    className="gallery-expand"
-                    onClick={() => setLightboxOpen(true)}
-                    aria-label="Открыть фото на весь экран"
-                  >
-                    <CatalogImage
-                      key={selected.id + "-" + photoIndex + "-" + (selectedVariant?.id ?? "")}
-                      src={imageUrl(selectedPhotos[photoIndex].url)}
-                      alt={selectedPhotos[photoIndex].alt || selectedVariant?.name || selected.title}
-                    />
-                    <span className="gallery-expand-hint" aria-hidden="true"><Maximize2 size={18} /></span>
-                  </button>
-                ) : (
-                  <div className="photo-placeholder"><ImagePlus /><span>Фотографии пока не добавлены</span></div>
-                )}
-                {selectedPhotos.length > 1 && (
-                  <>
-                    <button
-                      className="gallery-arrow prev"
-                      onClick={() => moveCatalogPhoto(-1)}
-                      aria-label="Предыдущее фото"
-                    >
-                      <ArrowLeft size={20} />
-                    </button>
-                    <button
-                      className="gallery-arrow next"
-                      onClick={() => moveCatalogPhoto(1)}
-                      aria-label="Следующее фото"
-                    >
-                      <ArrowRight size={20} />
-                    </button>
-                  </>
-                )}
-                {selectedPhotos.length > 0 && <span className="gallery-count">
-                  {photoIndex + 1} / {selectedPhotos.length}
-                </span>}
-              </div>
-              {selectedPhotos.length > 1 && (
-                <div className="thumbnails">
-                  {selectedPhotos.map((p, i) => (
-                    <button
-                      key={p.url + i}
-                      className={photoIndex === i ? "selected" : ""}
-                      onClick={() => selectCatalogPhoto(i)}
-                      aria-label={"Фото " + (i + 1)}
-                    >
-                      <CatalogImage src={imageUrl(p.url)} alt="" />
-                    </button>
-                  ))}
-                </div>
+            <div className="product-visual">
+              <ProductGallery photos={selectedPhotos} title={selectedVariant?.name ?? selected.title}
+                index={photoIndex} onSelect={selectCatalogPhoto} onMove={moveCatalogPhoto} onExpand={() => setLightboxOpen(true)}>
+                {!canEdit && <button
+                  type="button"
+                  className={"product-favorite" + (favoriteIds.has(selected.id) ? " is-favorite" : "")}
+                  onClick={() => void toggleFavorite(selected)}
+                  disabled={favoriteBusy !== null}
+                  aria-label={favoriteIds.has(selected.id) ? "Убрать из избранного" : "Добавить в избранное"}
+                  aria-pressed={favoriteIds.has(selected.id)}
+                ><Heart size={20} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} /></button>}
+              </ProductGallery>
+              {favoriteNotice?.workId === selected.id && (
+                <p ref={favoriteFeedback}
+                  className={(favoriteNotice.error ? "form-error" : "form-success") + " product-favorite-feedback"}
+                  role={favoriteNotice.error ? "alert" : "status"}>
+                  {favoriteNotice.message}
+                </p>
               )}
             </div>
             {lightboxOpen && lightboxPhotos.length > 0 && (
@@ -1035,17 +1012,19 @@ export default function Catalog() {
                 title={selectedVariant?.name ?? selected.title}
                 photos={lightboxPhotos}
                 initialIndex={photoIndex}
+                onPhotoChange={setPhotoIndex}
                 onClose={() => setLightboxOpen(false)}
               /></Suspense>
             )}
             <div className="detail-copy">
-              <div className="eyebrow">{selectedVariant ? selected.title : selected.category}</div>
+              {selected.category.trim() && <div className="eyebrow">{selected.category}</div>}
               <h2>{selectedVariant?.name ?? selected.title}</h2>
+              {selectedVariant && <p className="product-collection-name">Из коллекции «{selected.title}»</p>}
               {!collectionOverview && <span className="availability">
                 <span />
                 {labels[selectedVariant?.availability ?? selected.availability]}
               </span>}
-              <p>{selectedVariant?.description || selected.description}</p>
+              <strong className="price">{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}{selectedVariant && <small> за штуку</small>}</strong>
               {selected.variants.length > 0 && (
                 <section className="variant-picker" aria-label="Выбор фигурки">
                   <h3>Выберите фигурку</h3>
@@ -1072,52 +1051,27 @@ export default function Catalog() {
                   </div>
                 </section>
               )}
-              {selectedMeasurements && <SizeDiagram value={selectedMeasurements} />}
-              <dl>
-                {selected.material && (
+              {(selected.material.trim() || (!selectedVariant && !collectionOverview && !selectedMeasurements && selected.dimensions.trim())) && <dl className="product-specifications">
+                {selected.material.trim() && (
                   <>
                     <dt>Материал</dt>
                     <dd>{selected.material}</dd>
                   </>
                 )}
-                {!selectedVariant && !collectionOverview && !selectedMeasurements && selected.dimensions && (
+                {!selectedVariant && !collectionOverview && !selectedMeasurements && selected.dimensions.trim() && (
                   <>
                     <dt>Размеры</dt>
                     <dd>{selected.dimensions}</dd>
                   </>
                 )}
-                <dt>Исполнение</dt>
-                <dd>Ручная работа</dd>
-              </dl>
-              {collectionOverview ? <p className="collection-selection-hint">Выберите фигурку, чтобы увидеть её фотографии, цену и размеры.</p>
-                : <strong className="price">{money(selectedPrice)}{selectedVariant && <small> за штуку</small>}</strong>}
-              {!canEdit && (
-                <div className="favorite-detail-group">
-                  <button
-                    type="button"
-                    className={"button secondary favorite-detail" + (favoriteIds.has(selected.id) ? " is-favorite" : "")}
-                    onClick={() => void toggleFavorite(selected)}
-                    disabled={favoriteBusy !== null}
-                    aria-pressed={favoriteIds.has(selected.id)}
-                  >
-                    <Heart size={17} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} />
-                    {favoriteIds.has(selected.id) ? "В избранном" : "В избранное"}
-                  </button>
-                  {favoriteNotice?.workId === selected.id && (
-                    <p ref={favoriteFeedback}
-                      className={favoriteNotice.error ? "form-error favorite-feedback" : "form-success favorite-feedback"}
-                      role={favoriteNotice.error ? "alert" : "status"}>
-                      {favoriteNotice.message}
-                    </p>
-                  )}
-                </div>
-              )}
-              {!admin && <MasterContacts settings={settings}>
-                <button type="button" className="button primary write-to-master" aria-haspopup="dialog" onClick={() => {
-                  setMessageWork({ id: selected.id, title: selected.title });
-                  setSelectedThreadId(null);
-                  setMessagesOpen(true);
-                }}><MessageCircle size={18} />Написать мастеру</button>
+              </dl>}
+              {selectedMeasurements && <SizeDiagram value={selectedMeasurements} />}
+              {(selectedVariant?.description || selected.description).trim() && <p className="product-description">{selectedVariant?.description || selected.description}</p>}
+              {collectionOverview && <p className="collection-selection-hint">Выберите фигурку, чтобы увидеть её фотографии, цену и размеры.</p>}
+              {!admin && <MasterContacts settings={settings} compact>
+                <button type="button" className="button primary write-to-master" aria-haspopup="dialog" onClick={contactMaster}>
+                  <MessageCircle size={18} />Написать мастеру<ArrowRight size={17} aria-hidden="true" />
+                </button>
               </MasterContacts>}
               {canEdit && (
                 <button
@@ -1134,6 +1088,10 @@ export default function Catalog() {
               )}
             </div>
           </div>
+          {!admin && <div className="product-mobile-action">
+            <strong>{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}</strong>
+            <button type="button" className="button primary" aria-haspopup="dialog" onClick={contactMaster}><MessageCircle size={18} />Написать мастеру</button>
+          </div>}
         </Modal>
       )}
       {canEdit && editing !== undefined && (
@@ -1206,6 +1164,7 @@ export default function Catalog() {
         />
       )}
     </div>
+    </AdminModeContext>
   );
 }
 function TreeEditor({ works, ornaments, onClose, onSaved, onDeleted, onReordered }: {
@@ -1713,6 +1672,7 @@ function LoginEditor({
 }) {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
+    [nickname, setNickname] = useState(""),
     [registration, setRegistration] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -1724,7 +1684,7 @@ function LoginEditor({
     setMessage("");
     try {
       if (registration) {
-        const result = await signUp(email, password);
+        const result = await signUp(email, password, nickname);
         if (result.session) await onLoggedIn();
         else setMessage("Проверьте почту: мы отправили ссылку для подтверждения регистрации.");
       } else {
@@ -1748,6 +1708,19 @@ function LoginEditor({
         <p className="form-intro">
           {registration ? "Создайте аккаунт, чтобы сохранять понравившиеся работы." : "Введите email и пароль своего аккаунта."}
         </p>
+        {registration && <label htmlFor="registration-nickname">
+          Никнейм
+          <input
+            id="registration-nickname"
+            type="text"
+            autoComplete="nickname"
+            maxLength={30}
+            required
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            disabled={busy}
+          />
+        </label>}
         <label>
           Email
           <input
@@ -1763,7 +1736,7 @@ function LoginEditor({
           Пароль
           <input
             type="password"
-            autoComplete="current-password"
+            autoComplete={registration ? "new-password" : "current-password"}
             minLength={6}
             required
             value={password}

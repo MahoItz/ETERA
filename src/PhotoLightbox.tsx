@@ -1,4 +1,5 @@
 import { CatalogImage } from "./CatalogImage";
+import { AdminModeIndicator } from "./AdminModeIndicator";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import type { Photo } from "../lib/model";
@@ -9,9 +10,10 @@ type PhotoLightboxProps = {
   photos: Photo[];
   initialIndex: number;
   onClose: () => void;
+  onPhotoChange?: (index: number) => void;
 };
 
-export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLightboxProps) {
+export function PhotoLightbox({ title, photos, initialIndex, onClose, onPhotoChange }: PhotoLightboxProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const thumbnails = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -38,6 +40,10 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLig
       inline: "center",
     });
   }, [index]);
+
+  useEffect(() => {
+    onPhotoChange?.(index);
+  }, [index, onPhotoChange]);
 
   function move(direction: -1 | 1) {
     setIndex((current) => (current + direction + photos.length) % photos.length);
@@ -123,6 +129,7 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose }: PhotoLig
           </div>
         </>
       )}
+      <AdminModeIndicator />
     </dialog>
   );
 }
