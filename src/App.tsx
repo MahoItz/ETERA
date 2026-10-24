@@ -562,13 +562,13 @@ export default function Catalog() {
       <AdminModeIndicator />
       <header className={"header" + (adminAccountOpen ? " account-header" : "")}>
         <a className="brand" href={adminAccountOpen ? import.meta.env.BASE_URL : "#"} onClick={adminAccountOpen ? (event) => { event.preventDefault(); navigateAccount(false); } : undefined}>
-          <span className="brand-symbol">
-            <Flower2 size={26} />
-          </span>
-          <span>
-            {settings.name}
-            <small>ДЕКОР С ХАРАКТЕРОМ</small>
-          </span>
+          <img
+            className="brand-logo"
+            src={`${import.meta.env.BASE_URL}images/Main_logo.webp`}
+            alt="Natali Handmade Art — на главную"
+            width={840}
+            height={310}
+          />
         </a>
         <nav hidden={adminAccountOpen}>
           <a href="#catalog">Коллекция</a>
