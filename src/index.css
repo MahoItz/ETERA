@@ -46,12 +46,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .admin-mode-indicator { position: fixed; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 100; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #ccb1bb; border-radius: 50%; background: var(--ink); color: var(--paper); box-shadow: 0 4px 14px #3d293c30; pointer-events: none; }
 .studio-shell:has(dialog[open]) > .admin-mode-indicator { visibility: hidden; }
 ::selection { background: #e1b9dd; color: var(--ink); }
-.header { padding: 24px var(--gutter); display: flex; gap: 36px; align-items: center; }
-.brand { display: flex; align-items: center; gap: 13px; font-family: var(--serif); font-size: 27px; letter-spacing: -.8px; }
-.brand-symbol { background: var(--lilac); width: 49px; height: 49px; border-radius: 16px; display: grid; place-items: center; transform: rotate(-9deg); transition: transform .6s; }
-.brand:hover .brand-symbol { transform: rotate(75deg); }
-.brand-symbol svg { transform: rotate(9deg); }
-.brand small { display: block; font-family: var(--sans); font-size: 8px; letter-spacing: 2.6px; margin-top: 8px; }
+.header { padding: 10px var(--gutter); display: flex; gap: 36px; align-items: center; }
+.brand { display: flex; align-items: center; flex-shrink: 0; }
+.brand-logo { width: 190px; height: auto; }
 .header nav { display: flex; gap: 34px; margin-left: auto; font-size: 12px; }
 .header nav[hidden] { display: none; }
 .account-header > .account-menu, .account-header > .admin-toggle { margin-left: auto; }
@@ -513,10 +510,8 @@ dd { margin: 0; }
   .admin-actions .button { padding: 12px 15px; font-size: 11px; }
 }
 @media (max-width: 720px) {
-  .header { padding-top: 20px; padding-bottom: 20px; gap: 10px; }
-  .brand { font-size: 22px; gap: 10px; }
-  .brand-symbol { width: 41px; height: 41px; border-radius: 13px; }
-  .brand small { font-size: 7px; letter-spacing: 2px; margin-top: 6px; }
+  .header { padding-top: 8px; padding-bottom: 8px; gap: 10px; }
+  .brand-logo { width: 156px; }
   .admin-toggle { padding: 11px 13px; font-size: 10px; }
   .hero { grid-template-columns: 1fr; gap: 26px; padding-top: 39px; padding-bottom: 69px; border-radius: 0 0 38px 38px; }
   .hero-copy { padding-bottom: 0; }
@@ -623,10 +618,7 @@ dd { margin: 0; }
   .story .master-contact-list a { min-height: 76px; }
 }
 @media (max-width: 420px) {
-  .brand { font-size: 19px; }
-  .brand small { font-size: 6px; letter-spacing: 1.9px; }
-  .brand-symbol { width: 36px; height: 36px; }
-  .brand-symbol > svg { width: 23px; }
+  .brand-logo { width: 136px; }
   .admin-toggle { padding: 10px; font-size: 9px; gap: 5px; }
   .admin-toggle > svg { width: 13px; }
   .hero h1 { font-size: 44px; letter-spacing: -2.2px; }
