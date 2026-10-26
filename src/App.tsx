@@ -6,6 +6,10 @@ import { WorkChat } from "./WorkChat";
 import { ChatInbox } from "./ChatInbox";
 import { ChatNotifications } from "./ChatNotifications";
 import { useChatInbox } from "./useChatInbox";
+import { useCart } from "./useCart";
+import { Cart } from "./Cart";
+import { cartVariantId } from "../lib/cart";
+import "./cart.css";
 import "./chat.css";
 import "./product-detail.css";
 import { SizeDiagram } from "./SizeDiagram";
@@ -42,6 +46,7 @@ import {
   Plus,
   Pencil,
   Search,
+  ShoppingBag,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -174,12 +179,27 @@ export default function Catalog() {
     [lightboxOpen, setLightboxOpen] = useState(false),
     [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
+  const [workDialogRevision, setWorkDialogRevision] = useState(0);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
   const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages">("overview");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [messageWork, setMessageWork] = useState<{ id: string; title: string } | null>(null);
   const chatInbox = useChatInbox(userId);
+  const cart = useCart(admin ? null : userId);
+  const addCart = cart.add;
+  const [cartNotice, setCartNotice] = useState<{ workId: string; variantId: string | null; message: string; error: boolean } | null>(null);
+  const [pendingCartItem, setPendingCartItem] = useState<{ workId: string; variantId: string | null } | null>(null);
+  const pendingCartRequest = useRef(false);
+  const pendingCartOpen = useRef(false);
+  useEffect(() => {
+    if (userId && !admin && pendingCartOpen.current) { pendingCartOpen.current = false; setAccountOpen(true); }
+  }, [userId, admin]);
+  useEffect(() => {
+    if (!cartNotice) return;
+    const timer = window.setTimeout(() => setCartNotice(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [cartNotice]);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
   const collectionOverview = Boolean(selected?.variants.length && !selected.soldAsSet && !selectedVariant);
   const selectedMeasurements = selectedVariant ? selectedVariant.measurements ?? null : collectionOverview ? null : selected?.measurements;
@@ -419,6 +439,7 @@ export default function Catalog() {
   }
   function open(w: Work) {
     workOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setWorkDialogRevision(value => value + 1);
     setLightboxOpen(false);
     setSelected(w);
     setPhotoIndex(0);
@@ -500,6 +521,9 @@ export default function Catalog() {
       setSelectedThreadId(null);
       setFavoriteIds(new Set());
       setFavoriteNotice(null);
+      setCartNotice(null);
+      setPendingCartItem(null);
+      pendingCartOpen.current = false;
       setAccountOpen(false);
       if (adminAccountOpen) navigateAccount(false);
       setEditingEnabled(true);
@@ -553,6 +577,32 @@ export default function Catalog() {
       setFavoriteBusy(null);
     }
   }
+  function openCart() {
+    if (!userId) { pendingCartOpen.current = true; setLoginOpen(true); return; }
+    setMessagesOpen(false);
+    setAccountOpen(true);
+    cart.refresh();
+    if (accountMenu.current) accountMenu.current.open = false;
+  }
+  async function addToCart(work: Work, variantId: string | null = null) {
+    if (work.variants.length && !work.soldAsSet && !variantId) { open(work); return; }
+    const targetVariant = cartVariantId(work, variantId);
+    if (!userId) { setPendingCartItem({ workId: work.id, variantId: targetVariant }); setLoginOpen(true); return; }
+    if (pendingCartRequest.current || cart.busy) return;
+    pendingCartRequest.current = true;
+    setCartNotice(null);
+    try { await cart.add(work.id, targetVariant); setCartNotice({ workId: work.id, variantId: targetVariant, message: "Фигурка в корзине.", error: false }); }
+    catch (cause) { setCartNotice({ workId: work.id, variantId: targetVariant, message: cause instanceof Error ? cause.message : "Не удалось добавить фигурку.", error: true }); }
+    finally { pendingCartRequest.current = false; }
+  }
+  useEffect(() => {
+    if (!userId || !pendingCartItem || admin) return;
+    const item = pendingCartItem;
+    setPendingCartItem(null);
+    void addCart(item.workId, item.variantId)
+      .then(() => setCartNotice({ ...item, message: "Фигурка в корзине.", error: false }))
+      .catch((cause: unknown) => setCartNotice({ ...item, message: cause instanceof Error ? cause.message : "Не удалось добавить фигурку.", error: true }));
+  }, [userId, admin, pendingCartItem, addCart]);
   return (
     <AdminModeContext value={admin}>
     <div
@@ -575,6 +625,9 @@ export default function Catalog() {
           <a href="#story">О мастерской</a>
         </nav>
         <div className="header-account-actions">
+        {!admin && <button type="button" className="cart-header-button" aria-label={`Корзина${userId ? `, фигурок: ${cart.items.length}` : ""}`} aria-haspopup="dialog" onClick={openCart} disabled={loading}>
+          <ShoppingBag size={19} /><span className="cart-header-label">Корзина</span>{userId && <span>{cart.items.length}</span>}
+        </button>}
         {userId && <ChatNotifications inbox={chatInbox} onOpen={openMessages} />}
         {admin ? (
           <details
@@ -618,12 +671,14 @@ export default function Catalog() {
           </details>
         ) : userEmail ? (
           <details className="account-menu" ref={accountMenu}>
-            <summary className="admin-toggle"><UserRound size={16} /><span title={userNickname || undefined}>{userNickname || "Аккаунт"}</span><ChevronDown size={13} /></summary>
+            <summary className="admin-toggle" aria-label="Меню аккаунта"><UserRound size={16} /><span title={userNickname || undefined}>{userNickname || "Аккаунт"}</span><ChevronDown size={13} /></summary>
             <div className="account-panel">
               <span className="account-caption">{userEmail}</span>
               <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}>
-                <Heart size={16} />Избранное ({favoriteIds.size})
+                <UserRound size={16} />Личный кабинет
               </button>
+              <button type="button" onClick={openCart}><ShoppingBag size={16} />Корзина ({cart.items.length})</button>
+              <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}><Heart size={16} />Избранное ({favoriteIds.size})</button>
               <button type="button" onClick={() => openMessages(null)}><MessageCircle size={16} />Сообщения{chatInbox.unread_count > 0 && <span className="chat-count">{chatInbox.unread_count}</span>}</button>
               <button type="button" disabled={signingOut} onClick={() => void logout()}>
                 <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
@@ -870,6 +925,9 @@ export default function Catalog() {
                       </button>
                     )}
                   </div>
+                  {!admin && <button type="button" className="cart-card-button" disabled={cart.busy} onClick={() => void addToCart(w)}>
+                    <ShoppingBag size={16} />{w.variants.length && !w.soldAsSet ? "Выбрать фигурку" : cart.items.some(item => item.snapshot.work_id === w.id && !item.snapshot.variant_id) ? "В корзине" : "В корзину"}
+                  </button>}
                   {canEdit && (
                     <button className="edit-card" onClick={() => setEditing(w)}>
                       Редактировать работу <Settings2 size={14} />
@@ -965,7 +1023,7 @@ export default function Catalog() {
         </div>
       )}
       {selected && (
-        <Modal title={selected.title} onClose={closeWork} wide variant="product">
+        <Modal key={workDialogRevision} title={selected.title} onClose={closeWork} wide variant="product">
           <div className="detail">
             <div className="product-visual">
               <ProductGallery photos={selectedPhotos} title={selectedVariant?.name ?? selected.title}
@@ -1048,6 +1106,11 @@ export default function Catalog() {
               {selectedMeasurements && <SizeDiagram value={selectedMeasurements} />}
               {(selectedVariant?.description || selected.description).trim() && <p className="product-description">{selectedVariant?.description || selected.description}</p>}
               {collectionOverview && <p className="collection-selection-hint">Выберите фигурку, чтобы увидеть её фотографии, цену и размеры.</p>}
+              {!admin && <button type="button" className="button secondary cart-product-button" disabled={cart.busy || collectionOverview || selected.availability === "sold" || (!selected.soldAsSet && selectedVariant?.availability === "sold")}
+                onClick={() => void addToCart(selected, selectedVariantId)}><ShoppingBag size={18} />
+                {collectionOverview ? "Выберите фигурку выше" : cart.items.some(item => item.snapshot.work_id === selected.id && item.snapshot.variant_id === cartVariantId(selected, selectedVariantId)) ? "Уже в корзине" : selected.soldAsSet ? "Добавить набор в корзину" : "Добавить в корзину"}
+              </button>}
+              {cartNotice?.workId === selected.id && cartNotice.variantId === cartVariantId(selected, selectedVariantId) && <p className={cartNotice.error ? "form-error" : "form-success"} role={cartNotice.error ? "alert" : "status"}>{cartNotice.message} {!cartNotice.error && <button type="button" className="cart-open" onClick={openCart}>Открыть корзину</button>}</p>}
               {!admin && <MasterContacts settings={settings} compact>
                 <button type="button" className="button primary write-to-master" aria-haspopup="dialog" onClick={contactMaster}>
                   <MessageCircle size={18} />Написать мастеру<ArrowRight size={17} aria-hidden="true" />
@@ -1095,7 +1158,7 @@ export default function Catalog() {
       />}
       {loginOpen && (
         <LoginEditor
-          onClose={() => setLoginOpen(false)}
+          onClose={() => { setLoginOpen(false); setPendingCartItem(null); pendingCartOpen.current = false; }}
           onLoggedIn={async () => {
             setLoginOpen(false);
             setEditingEnabled(true);
@@ -1114,6 +1177,11 @@ export default function Catalog() {
         <Modal title="Личный кабинет" onClose={() => setAccountOpen(false)}>
           <div className="account-content">
             <p className="form-intro">{userEmail}</p>
+            {userId && !admin && <Cart key={userId} cart={cart} works={works} onSent={id => { setCartNotice(null); openMessages(id); }} onOpen={(work, variantId) => {
+              // Keep the cart mounted behind the preview, including its draft.
+              open(work);
+              if (variantId) { setSelectedVariantId(variantId); updateCatalogUrl(work.slug ?? work.id, work.variants.find(variant => variant.id === variantId)?.slug ?? variantId, "replace"); }
+            }} />}
             <h3>Понравившиеся работы</h3>
             {publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
               <div className="favorite-list">
@@ -1129,6 +1197,10 @@ export default function Catalog() {
           </div>
         </Modal>
       )}
+      {cartNotice && !selected && !accountOpen && <div className="cart-notice" role={cartNotice.error ? "alert" : "status"}>{cartNotice.message}
+        {!cartNotice.error && <button type="button" onClick={() => { setCartNotice(null); openCart(); }}>Открыть корзину</button>}
+        <button type="button" aria-label="Закрыть уведомление" onClick={() => setCartNotice(null)}><X size={15} /></button>
+      </div>}
       {admin && settingsSection && (
         <SettingsEditor
           settings={settings}

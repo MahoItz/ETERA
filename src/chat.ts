@@ -1,7 +1,8 @@
 import { supabase } from "./supabase";
+import type { SelectionItem } from "../lib/cart";
 
-export type ChatMessage = { id: string; seq: number; conversation_id: string; sender_id: string | null; sender_role: "customer" | "admin"; body: string; created_at: string };
-export type ChatThread = { id: string; customer_id: string; work_id: string | null; work_title: string; updated_at: string; participant_label: string; unread_count: number; last_message: string | null };
+export type ChatMessage = { id: string; seq: number; conversation_id: string; sender_id: string | null; sender_role: "customer" | "admin"; body: string; created_at: string; selection?: SelectionItem[] | null };
+export type ChatThread = { id: string; customer_id: string; work_id: string | null; kind?: "work" | "cart"; work_title: string; updated_at: string; participant_label: string; unread_count: number; last_message: string | null };
 export type ChatInboxData = { threads: ChatThread[]; unread_count: number; has_more: boolean };
 export const CHAT_REFRESH = "etera-chat-refresh";
 export const refreshChat = () => window.dispatchEvent(new Event(CHAT_REFRESH));
@@ -46,7 +47,7 @@ export async function loadChatThread(id: string, signal: AbortSignal): Promise<C
 }
 
 export async function loadChatMessages(id: string, signal: AbortSignal, options: { before?: number; after?: number } = {}): Promise<ChatMessage[]> {
-  let query = supabase.from("chat_messages").select("id, seq, conversation_id, sender_id, sender_role, body, created_at").eq("conversation_id", id);
+  let query = supabase.from("chat_messages").select("id, seq, conversation_id, sender_id, sender_role, body, created_at, selection").eq("conversation_id", id);
   if (options.before !== undefined) query = query.lt("seq", options.before);
   if (options.after !== undefined) query = query.gt("seq", options.after);
   const [{ data, error }, conversation] = await Promise.all([

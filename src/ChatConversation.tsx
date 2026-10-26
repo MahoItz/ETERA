@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
 import { ChatDeletedError, loadChatMessages, markChatRead, mergeMessages, notifyChatRead, refreshChat, sendChatMessage, type ChatMessage } from "./chat";
 import { supabase } from "./supabase";
+import { SelectionList } from "./SelectionList";
 
 export function ChatConversation({ conversationId, workId, userId, admin = false, onLogin, blocked = false, onConversationCreated }: {
   conversationId?: string; workId?: string; userId: string | null; admin?: boolean; onLogin?: () => void; blocked?: boolean; onConversationCreated?: (id: string) => void;
@@ -143,7 +144,7 @@ export function ChatConversation({ conversationId, workId, userId, admin = false
       {hasOlder && <button type="button" className="chat-load-older" disabled={loadingOlder} onClick={() => void older()}>{loadingOlder ? "Загружаем…" : "Показать предыдущие сообщения"}</button>}
       {messages.map(message => <article key={message.id} className={"chat-message" + (message.sender_role === (admin ? "admin" : "customer") ? " is-own" : "")}>
         <span>{message.sender_role === (admin ? "admin" : "customer") ? "Вы" : admin ? "Покупатель" : "Мастер"}</span>
-        <p>{message.body}</p><time dateTime={message.created_at}>{new Date(message.created_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
+        <p>{message.body}</p>{message.selection && message.selection.length > 0 && <SelectionList items={message.selection} />}<time dateTime={message.created_at}>{new Date(message.created_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
       </article>)}
     </div>}
     {readError && <p className="chat-hint">Не удалось отметить сообщения прочитанными. <button type="button" onClick={() => setReadRetry(value => value + 1)}>Повторить</button></p>}

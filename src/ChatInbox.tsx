@@ -48,7 +48,7 @@ export function ChatInbox({ inbox, userId, admin, requestedId }: {
       <div className="chat-thread-detail">
         {selectedId && <button type="button" className="chat-back" onClick={() => setSelectedId(null)}><ArrowLeft size={15} />Все переписки</button>}
         {error ? <p className="form-error" role="alert">{error}</p> : thread && selectedId ? <>
-          <div className="chat-thread-context"><div className="chat-thread-heading"><h3>{thread.work_title}</h3><DeleteChatButton id={selectedId} title={thread.work_title} userId={userId} onDeleted={deleted} /></div><p>{thread.participant_label}</p>{!thread.work_id && <small>Работа удалена из каталога. Переписка сохранена.</small>}</div>
+          <div className="chat-thread-context"><div className="chat-thread-heading"><h3>{thread.work_title}</h3><DeleteChatButton id={selectedId} title={thread.work_title} userId={userId} onDeleted={deleted} /></div><p>{thread.participant_label}</p>{thread.kind === "cart" ? <small>Подборки фигурок, отправленные из корзины.</small> : !thread.work_id && <small>Работа удалена из каталога. Переписка сохранена.</small>}</div>
           <ChatConversation key={`${userId}:${selectedId}`} conversationId={selectedId} userId={userId} admin={admin} />
         </> : <p className="chat-hint">{selectedId ? "Открываем переписку…" : "Выберите переписку, чтобы прочитать сообщения и ответить."}</p>}
       </div>
