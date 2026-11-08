@@ -444,6 +444,9 @@ dd { margin: 0; }
 .form-error { color: #a84b49; background: #f3dcd7; padding: 12px; border-radius: 10px; font-size: 12px; line-height: 1.7; }
 .form-success { color: #4f765b; background: #deecdc; padding: 12px; border-radius: 10px; font-size: 12px; line-height: 1.7; }
 .auth-switch { display: block; margin: 18px auto 0; border: 0; border-bottom: 1px solid currentColor; padding: 2px; background: transparent; color: #70445f; font-size: 12px; }
+.auth-forgot { display: block; margin: -8px 0 20px auto; border: 0; border-bottom: 1px solid currentColor; padding: 8px 2px; background: transparent; color: #70445f; font-size: 12px; }
+.auth-forgot:hover, .auth-switch:hover { color: var(--ink); }
+.auth-form .form-footer { flex-wrap: wrap; }
 .favorite-detail { margin-bottom: 10px; }
 .favorite-detail-group { margin-bottom: 10px; }
 .favorite-feedback { margin: 0 0 10px; }

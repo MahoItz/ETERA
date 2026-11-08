@@ -3,6 +3,7 @@ import type { Measurements } from "../lib/measurements";
 import { defaults, type Settings, type Variant, type Work } from "../lib/model";
 import { normalizeContacts } from "../lib/contacts";
 import { supabase } from "./supabase";
+import { passwordRecoveryError, passwordRecoveryRedirect } from "../lib/password-recovery";
 import type { TreeOrnament } from "./tree-items";
 import { WorkSaveError, type WorkSaveRequest } from "./work-save";
 import { renewPhotoUpload, storagePathFromUrl as photoStoragePath, uploadProtectedPhoto } from "./work-photo-cleanup";
@@ -342,6 +343,20 @@ export async function signUp(email: string, password: string, nickname: string) 
   });
   fail(result.error);
   return result.data;
+}
+
+export async function requestPasswordRecovery(email: string) {
+  const result = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: passwordRecoveryRedirect(new URL(import.meta.env.BASE_URL, window.location.origin).href),
+  });
+  if (result.error) throw new Error(passwordRecoveryError(result.error,
+    "Не удалось отправить письмо. Проверьте соединение и попробуйте ещё раз."));
+}
+
+export async function updatePassword(password: string) {
+  const result = await supabase.auth.updateUser({ password });
+  if (result.error) throw new Error(passwordRecoveryError(result.error,
+    "Не удалось изменить пароль. Попробуйте ещё раз или запросите новую ссылку."));
 }
 
 export async function loadFavoriteWorkIds(): Promise<Set<string>> {

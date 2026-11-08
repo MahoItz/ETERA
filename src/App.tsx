@@ -1,5 +1,7 @@
 import { CatalogImage } from "./CatalogImage";
 import { ProductGallery } from "./ProductGallery";
+import { PasswordRecoveryEditor } from "./PasswordRecoveryEditor";
+import { usePasswordRecovery } from "./usePasswordRecovery";
 import { AdminModeContext, AdminModeIndicator } from "./AdminModeIndicator";
 import { MasterContacts } from "./MasterContacts";
 import { WorkChat } from "./WorkChat";
@@ -77,6 +79,7 @@ import {
   type CategoryDraft,
   signIn,
   signUp,
+  requestPasswordRecovery,
   signOut,
   uploadPhoto,
   renewUploadedPhoto,
@@ -142,6 +145,9 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (value: st
 }
 
 export default function Catalog() {
+  const passwordRecovery = usePasswordRecovery();
+  const recoveryOpen = passwordRecovery.state !== "idle";
+  const [loginRecovery, setLoginRecovery] = useState(false);
   const motionRoot = useRef<HTMLDivElement>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
   const workOpener = useRef<HTMLElement | null>(null);
@@ -303,7 +309,7 @@ export default function Catalog() {
     setLimit(24);
   }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
-    if (lightboxOpen || messagesOpen || loginOpen || selectedPhotos.length < 2) return;
+    if (lightboxOpen || messagesOpen || loginOpen || recoveryOpen || selectedPhotos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable)) return;
       if (e.key === "ArrowRight") {
@@ -317,7 +323,7 @@ export default function Catalog() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedPhotos.length, lightboxOpen, messagesOpen, loginOpen]);
+  }, [selectedPhotos.length, lightboxOpen, messagesOpen, loginOpen, recoveryOpen]);
   useEffect(() => {
     if (
       !motionRoot.current ||
@@ -731,7 +737,7 @@ export default function Catalog() {
           </button>
         ) : undefined}
       /> : <StandardHero works={works} ready={!loading && !error} loading={loading} onOpen={open}
-        stopMotion={selected !== null || loginOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
+        stopMotion={selected !== null || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
@@ -1158,15 +1164,23 @@ export default function Catalog() {
       />}
       {loginOpen && (
         <LoginEditor
-          onClose={() => { setLoginOpen(false); setPendingCartItem(null); pendingCartOpen.current = false; }}
+          initialRecovery={loginRecovery}
+          onClose={() => { setLoginOpen(false); setLoginRecovery(false); setPendingCartItem(null); pendingCartOpen.current = false; }}
           onLoggedIn={async () => {
             setLoginOpen(false);
+            setLoginRecovery(false);
             setEditingEnabled(true);
             setScope("published");
             await load();
           }}
         />
       )}
+      {recoveryOpen && <PasswordRecoveryEditor
+        state={passwordRecovery.state}
+        onClose={passwordRecovery.close}
+        onRequestLink={() => { passwordRecovery.close(); setLoginRecovery(true); setLoginOpen(true); }}
+        onUpdated={() => { void load(); }}
+      />}
       {messagesOpen && (userId || messageWork) && <Modal title="Переписка с мастером" wide onClose={() => { setMessagesOpen(false); setMessageWork(null); }}>
         <div className="customer-messages">{messageWork ? <>
           {userId && <button type="button" className="chat-show-all" onClick={() => { setMessageWork(null); setSelectedThreadId(null); }}>Все переписки</button>}
@@ -1728,24 +1742,44 @@ function SettingsEditor({
 function LoginEditor({
   onClose,
   onLoggedIn,
+  initialRecovery = false,
 }: {
   onClose: () => void;
   onLoggedIn: () => Promise<void>;
+  initialRecovery?: boolean;
 }) {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [nickname, setNickname] = useState(""),
-    [registration, setRegistration] = useState(false),
+    [mode, setMode] = useState<"login" | "registration" | "recovery">(initialRecovery ? "recovery" : "login"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
+  const registration = mode === "registration";
+  const recovery = mode === "recovery";
+  const submitting = useRef(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  useEffect(() => {
+    if (!resendCooldown) return;
+    const timer = window.setTimeout(() => setResendCooldown((seconds) => seconds - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+  function switchMode(nextMode: typeof mode) {
+    setMode(nextMode); setPassword(""); setError(""); setMessage("");
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (submitting.current || (recovery && resendCooldown > 0)) return;
+    submitting.current = true;
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      if (registration) {
+      if (recovery) {
+        await requestPasswordRecovery(email);
+        setResendCooldown(60);
+        setMessage("Если аккаунт с таким email существует, мы отправили письмо со ссылкой для восстановления пароля. Проверьте входящие и папку «Спам».");
+      } else if (registration) {
         const result = await signUp(email, password, nickname);
         if (result.session) await onLoggedIn();
         else setMessage("Проверьте почту: мы отправили ссылку для подтверждения регистрации.");
@@ -1754,27 +1788,29 @@ function LoginEditor({
         await onLoggedIn();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось войти");
+      setError(e instanceof Error ? e.message : recovery ? "Не удалось отправить письмо. Попробуйте ещё раз." : "Не удалось войти");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
   return (
     <Modal
-      title={registration ? "Регистрация" : "Вход"}
+      title={recovery ? "Восстановление пароля" : registration ? "Регистрация" : "Вход"}
       onClose={() => {
         if (!busy) onClose();
       }}
     >
-      <form className="editor-form" onSubmit={submit}>
+      <form className="editor-form auth-form" onSubmit={submit}>
         <p className="form-intro">
-          {registration ? "Создайте аккаунт, чтобы сохранять понравившиеся работы." : "Введите email и пароль своего аккаунта."}
+          {recovery ? "Укажите email вашего аккаунта. Мы отправим ссылку, по которой можно задать новый пароль." : registration ? "Создайте аккаунт, чтобы сохранять понравившиеся работы." : "Введите email и пароль своего аккаунта."}
         </p>
         {registration && <label htmlFor="registration-nickname">
           Никнейм
           <input
             id="registration-nickname"
             type="text"
+            aria-label="Никнейм"
             autoComplete="nickname"
             maxLength={30}
             required
@@ -1783,21 +1819,25 @@ function LoginEditor({
             disabled={busy}
           />
         </label>}
-        <label>
+        <label htmlFor="login-email">
           Email
           <input
+            id="login-email"
             type="email"
+            aria-label="Email"
             autoComplete="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); if (recovery) setMessage(""); }}
             disabled={busy}
           />
         </label>
-        <label>
+        {!recovery && <label htmlFor="login-password">
           Пароль
           <input
+            id="login-password"
             type="password"
+            aria-label="Пароль"
             autoComplete={registration ? "new-password" : "current-password"}
             minLength={6}
             required
@@ -1805,7 +1845,8 @@ function LoginEditor({
             onChange={(e) => setPassword(e.target.value)}
             disabled={busy}
           />
-        </label>
+        </label>}
+        {mode === "login" && <button type="button" className="auth-forgot" disabled={busy} onClick={() => switchMode("recovery")}>Забыли пароль?</button>}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -1821,17 +1862,17 @@ function LoginEditor({
           >
             Отмена
           </button>
-          <button className="button primary" disabled={busy}>
-            {busy ? (registration ? "Создаём аккаунт…" : "Входим…") : registration ? "Зарегистрироваться" : "Войти"}
+          <button className="button primary" disabled={busy || (recovery && resendCooldown > 0)}>
+            {recovery ? busy ? "Отправляем…" : resendCooldown > 0 ? `Повторить через ${resendCooldown} с` : "Отправить ссылку" : busy ? (registration ? "Создаём аккаунт…" : "Входим…") : registration ? "Зарегистрироваться" : "Войти"}
           </button>
         </div>
         <button
           type="button"
           className="auth-switch"
           disabled={busy}
-          onClick={() => { setRegistration((value) => !value); setError(""); setMessage(""); }}
+          onClick={() => switchMode(registration || recovery ? "login" : "registration")}
         >
-          {registration ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
+          {recovery ? "Вернуться ко входу" : registration ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
         </button>
       </form>
     </Modal>

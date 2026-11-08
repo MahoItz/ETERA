@@ -1,4 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { passwordRecoveryLink } from "../lib/password-recovery";
+
+// Capture the callback before the SDK consumes and removes its URL fragment.
+export const initialPasswordRecovery = passwordRecoveryLink(window.location.href);
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
