@@ -162,7 +162,7 @@ export async function saveWork(request: WorkSaveRequest): Promise<Work> {
     const code = result.error.code;
     const message = code === "PGRST202"
       ? "Для сохранения нужно применить обновление базы данных. Ваши изменения остались в редакторе."
-      : code === "40001"
+      : code === "40001" || code === "PT409"
         ? "Эту работу уже изменили на другом устройстве. Обновите каталог."
         : code === "55000"
           ? "Фотография больше недоступна. Загрузите её заново и повторите сохранение."
@@ -223,7 +223,7 @@ export async function saveTreeOrnamentOrder(previous: TreeOrnament[], ordered: T
   if (result.error?.code === "PGRST202") {
     throw new Error("Для сохранения порядка нужно применить обновление базы данных. Пока оставлен прежний порядок.");
   }
-  if (result.error?.code === "40001") {
+  if (result.error?.code === "40001" || result.error?.code === "PT409") {
     throw new Error("Список украшений уже изменён на другом устройстве. Закройте окно и обновите страницу перед повторной попыткой.");
   }
   fail(result.error);
@@ -256,7 +256,7 @@ export async function saveCategories(categories: CategoryDraft[], expectedRevisi
   if (result.error?.code === "PGRST202") {
     throw new Error("Для сохранения категорий нужно применить обновление базы данных.");
   }
-  if (result.error?.code === "40001") {
+  if (result.error?.code === "40001" || result.error?.code === "PT409") {
     throw new Error("Список категорий уже изменили на другом устройстве. Закройте окно и обновите каталог.");
   }
   fail(result.error);

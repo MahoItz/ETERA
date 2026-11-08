@@ -84,7 +84,7 @@ begin
   begin
     perform public.save_work(gen_random_uuid(), target_id, 1, payload);
     raise exception 'Expected stale revision rejection';
-  exception when serialization_failure then null;
+  exception when sqlstate 'PT409' then null;
   end;
   begin
     perform public.save_work(create_request, null, null, jsonb_set(payload, '{title}', '"Changed payload"'));

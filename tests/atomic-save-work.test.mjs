@@ -92,7 +92,7 @@ test('Stale revisions and reused request IDs with different payloads leave the c
   const created = await call(input, { requestId });
   await call(input, { id: created.id, revision: 1 });
   const previous = await snapshot();
-  await rejectsSql(() => call(input, { id: created.id, revision: 1 }), '40001');
+  await rejectsSql(() => call(input, { id: created.id, revision: 1 }), 'PT409');
   await rejectsSql(() => call({ ...input, title: 'Different' }, { requestId }), '22023');
   assert.deepEqual(await snapshot(), previous);
 }));

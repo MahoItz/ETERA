@@ -50,7 +50,7 @@ test('cart is private including from master; writes cannot be forged, own items 
     assert.deepEqual((await db.query('select * from public.cart_items')).rows,[]);
     assert.deepEqual(await list(),[]);
     await db.query('delete from public.cart_items where id=$1',[item.id]);
-    await denied(()=>submit([item.id]),id===admin?'42501':'40001');
+    await denied(()=>submit([item.id]),id===admin?'42501':'PT409');
   }
   await asUser(customer);
   await denied(()=>db.query('insert into public.cart_items(user_id,snapshot) values ($1,$2)',[customer,{title:'Fake',price:1}]));
@@ -125,7 +125,7 @@ test('invalid and stale requests fail atomically; new items in another tab are n
   await asUser(customer);const item=await add();const second=await add(collection,variant);
   for(const ids of [[],[item.id,item.id],Array(51).fill(item.id),[null]]) await denied(()=>submit(ids),'22023');
   await denied(()=>submit([item.id],'x'.repeat(2001)),'22023');
-  await denied(()=>submit([item.id,crypto.randomUUID()]),'40001');
+  await denied(()=>submit([item.id,crypto.randomUUID()]),'PT409');
   const sent=await submit([item.id]);assert.equal(sent.message.selection.length,1);
   assert.equal((await list()).some(x=>x.id===second.id),true);
 }));

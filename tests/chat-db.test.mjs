@@ -139,7 +139,7 @@ test('strangers, anon, missing identities and demoted masters cannot delete some
 
 test('a message arriving after confirmation prevents deletion; a fresh confirmation and retries succeed',()=>isolated(async()=>{
  await asUser(customer);const first=await send('Первое');const second=await send('Новое');
- await asUser(admin);await denied(()=>remove(first.conversation_id,first.message.id),'40001');
+ await asUser(admin);await denied(()=>remove(first.conversation_id,first.message.id),'PT409');
  assert.equal((await inbox()).unread_count,2);
  assert.equal((await db.query('select count(*)::int as n from public.chat_messages where conversation_id=$1',[first.conversation_id])).rows[0].n,2);
  await remove(first.conversation_id,second.message.id);await remove(first.conversation_id,second.message.id);
@@ -149,8 +149,8 @@ test('a message arriving after confirmation prevents deletion; a fresh confirmat
 test('participants cannot bypass the delete RPC or forge a confirmation for a nonempty chat',()=>isolated(async()=>{
  await asUser(customer);const first=await send('Вопрос');
  await denied(()=>db.query('delete from public.chat_conversations where id=$1',[first.conversation_id]));
- await denied(()=>remove(first.conversation_id,null),'40001');
- await denied(()=>remove(first.conversation_id,crypto.randomUUID()),'40001');
+ await denied(()=>remove(first.conversation_id,null),'PT409');
+ await denied(()=>remove(first.conversation_id,crypto.randomUUID()),'PT409');
  assert.equal((await inbox()).threads.length,1);
 }));
 
