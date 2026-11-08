@@ -15,6 +15,7 @@ export function Cart({ cart, works, onSent, onOpen }: { cart: CartState; works: 
   const pending = useRef(false);
   const request = useRef<{ id: string; fingerprint: string } | null>(null);
   const fieldId = useId();
+  const formId = useId();
   const rows = cart.items.map(item => ({ item, ...cartItemState(item, works) }));
   const unavailable = rows.some(row => !row.available);
 
@@ -33,12 +34,13 @@ export function Cart({ cart, works, onSent, onOpen }: { cart: CartState; works: 
     pending.current = true; setSending(true); setError("");
     try {
       const id = await submitCart(request.current.id, ids, body);
-      request.current = null; refreshChat(); onSent(id);
+      request.current = null; setComment(""); refreshChat(); onSent(id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось отправить подборку."); cart.refresh(); }
     finally { pending.current = false; setSending(false); }
   }
   return <section className="cart" aria-label="Корзина">
-    <div className="cart-heading"><div><h3>Корзина <small>{rows.length} / {MAX_CART_ITEMS}</small></h3><p>Соберите фигурки и отправьте подборку мастеру, чтобы обсудить детали.</p></div>
+    <div className="cart-scroll">
+    <div className="cart-heading"><div><h3>Ваша подборка <small>{rows.length} / {MAX_CART_ITEMS}</small></h3><p>Соберите фигурки и отправьте подборку мастеру, чтобы обсудить детали.</p></div>
       <button type="button" className="icon-button" aria-label="Обновить корзину" onClick={cart.refresh} disabled={cart.loading || cart.busy || sending}><RefreshCw size={18} /></button></div>
     {cart.loading && <p role="status" className="form-intro">Обновляем корзину…</p>}
     {cart.error && <div className="chat-error"><p role="alert">{cart.error}</p><button type="button" onClick={cart.refresh}>Повторить загрузку</button></div>}
@@ -55,14 +57,17 @@ export function Cart({ cart, works, onSent, onOpen }: { cart: CartState; works: 
         </div>
         <button type="button" className="icon-button" aria-label={`Удалить «${selection.variant_name || selection.title}» из корзины`} disabled={cart.busy || sending} onClick={() => void remove(item.id)}><Trash2 size={18} /></button>
       </li>)}</ul>
-      <form className="cart-form" onSubmit={event => void send(event)}>
+      <form id={formId} className="cart-form" onSubmit={event => void send(event)}>
         <label htmlFor={fieldId}><span>Комментарий мастеру <small>(необязательно)</small></span>
           <textarea id={fieldId} aria-label="Комментарий мастеру" value={comment} onChange={event => setComment(event.target.value)} maxLength={2000} rows={3} disabled={sending} placeholder="Расскажите о пожеланиях: цвет, количество, сроки…" />
         </label>
         <p className="form-intro">Мастер увидит подборку после отправки. Это обращение для обсуждения: фигурки не резервируются, цена и сроки согласовываются в переписке. Корзина сохранится.</p>
-        <button className="button primary" type="submit" disabled={sending || cart.busy || cart.loading || Boolean(cart.error) || unavailable}><MessageCircle size={18} />{sending ? "Отправляем…" : "Обсудить с мастером"}</button>
       </form>
     </>}
-    {error && <p className="form-error" role="alert">{error}</p>}
+    </div>
+    {(rows.length > 0 || error) && <div className="cart-footer">
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {rows.length > 0 && <button form={formId} className="button primary" type="submit" disabled={sending || cart.busy || cart.loading || Boolean(cart.error) || unavailable}><MessageCircle size={18} />{sending ? "Отправляем…" : "Обсудить с мастером"}</button>}
+    </div>}
   </section>;
 }

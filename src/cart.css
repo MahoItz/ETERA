@@ -16,10 +16,12 @@
 .cart-form .button { justify-content: center; }
 .cart-header-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
 .cart-header-button:focus-visible, .cart-header-button:hover { background: #f0e5ee; }
+.cart-header-button > span:last-child { display: inline-block; font-variant-numeric: tabular-nums; }
 .cart-card-button { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 9px 12px; border: 1px solid #decfdd; border-radius: 9px; background: transparent; color: #654264; font-size: 13px; cursor: pointer; }
 .cart-card-button:disabled { opacity: .6; cursor: default; }
 .cart-product-button { width: 100%; justify-content: center; margin: 16px 0 10px; }
 .cart-notice { position: fixed; z-index: 1000; left: 50%; bottom: 28px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); padding: 14px 18px; border: 1px solid #decfdd; border-radius: 12px; box-shadow: 0 8px 30px #38203925; background: #fff; color: #493047; }
+.studio-shell:has(.cart-floating) > .cart-notice { bottom: calc(96px + env(safe-area-inset-bottom)); }
 .cart-notice button { margin-left: 12px; border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; }
 .selection-list { margin: 12px 0 0; }
 .selection-list li { gap: 10px; padding: 10px 0; }
@@ -27,12 +29,57 @@
 .selection-list li > div { min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .selection-list a { color: inherit; text-decoration: underline; font-weight: 600; }
 .selection-list small { font-size: 12px; }
-.account-content > .cart { margin-bottom: 32px; }
+.account-cart-link { margin-bottom: 28px; }
+.cart-floating { position: fixed; z-index: 80; right: max(24px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); display: inline-flex; align-items: center; gap: 12px; min-height: 58px; padding: 12px 14px 12px 20px; border: 1px solid #705565; border-radius: 999px; background: var(--ink); color: #fff8f3; box-shadow: 0 8px 28px #3d293c30; font-size: 14px; transition: background .2s, box-shadow .2s; }
+.cart-floating:hover { background: #543850; box-shadow: 0 10px 32px #3d293c40; }
+.cart-floating-count { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 7px; border-radius: 50%; background: var(--peach); color: var(--ink); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cart-count-bump { animation: cart-count-bump .4s ease-out; }
+.studio-shell:has(dialog[open]) > .cart-floating { visibility: hidden; }
+.product-modal:has(.cart-floating) .detail-copy { padding-bottom: 100px; }
+@media (max-width: 760px) {
+  .product-modal > .product-desktop-cart { display: none; }
+  .product-modal:has(.cart-floating) .detail-copy { padding-bottom: 20px; }
+  .product-modal .product-mobile-action:has(.cart-floating) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 16px; }
+  .product-mobile-action > .cart-floating { position: static; grid-column: 2; grid-row: 1; }
+  .product-mobile-action:has(.cart-floating) > .button { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 360px) {
+  .product-mobile-action > .cart-floating > span:not(.cart-floating-count) { display: none; }
+}
+.modal.cart-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(460px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 24px 0 0 24px; overflow: hidden; }
+.modal.cart-drawer[open] { display: flex; flex-direction: column; animation: cart-drawer-enter .3s cubic-bezier(.16,1,.3,1); }
+.cart-drawer > .modal-head { flex-shrink: 0; padding: max(22px, env(safe-area-inset-top)) 24px 22px; }
+.cart-drawer .cart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.cart-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; }
+.cart-drawer .cart-heading h3 { font-size: 22px; }
+.cart-drawer .cart-heading p { margin: 12px 0 0; }
+.cart-drawer .cart-list { margin-top: 12px; }
+.cart-drawer .cart-list li { border-color: var(--line); }
+.cart-drawer .cart-list .icon-button { flex-shrink: 0; }
+.cart-drawer .cart-empty { padding: 54px 10px; }
+.cart-empty > svg { margin: 0 auto 18px; color: var(--muted); }
+.cart-form .form-intro { margin: 0; }
+.cart-footer { flex-shrink: 0; padding: 18px 24px max(22px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: #f8ece5; box-shadow: 0 -6px 20px #3d293c08; }
+.cart-footer .button { width: 100%; min-height: 48px; justify-content: center; }
+.cart-footer .form-error { margin: 0 0 12px; }
+@keyframes cart-count-bump { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-5px); } 70% { transform: translateY(1px); } }
+@keyframes cart-drawer-enter { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes cart-sheet-enter { from { opacity: 0; transform: translateY(36px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 600px) {
   .header-account-actions { gap: 8px; }
   .cart-list li { gap: 10px; }
   .cart-list img, .cart-list .image-fallback { width: 60px; height: 78px; }
   .cart-header-label { display: none; }
+  .cart-floating { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); min-height: 54px; padding: 10px 12px 10px 16px; gap: 10px; }
+  .modal.cart-drawer { inset: auto 0 0; width: 100%; height: 88dvh; max-height: calc(100dvh - env(safe-area-inset-top) - 12px); border-radius: 24px 24px 0 0; }
+  .modal.cart-drawer[open] { animation-name: cart-sheet-enter; }
+  .cart-drawer > .modal-head { padding: 18px 20px; }
+  .cart-scroll { padding: 20px; }
+  .cart-footer { padding: 16px 20px max(20px, env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cart-count-bump, .modal.cart-drawer[open], .cart-drawer::backdrop { animation: none; }
+  .cart-floating { transition: none; }
 }
 @media (max-width: 420px) {
   .header:has(.cart-header-button) .brand-logo { width: 120px; }

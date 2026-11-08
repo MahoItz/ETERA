@@ -45,9 +45,9 @@ function lockPageScroll() {
   };
 }
 
-export function usePageScrollLock() {
+export function usePageScrollLock(enabled = true) {
   // Freeze and restore the background before the browser can paint a frame.
-  useLayoutEffect(() => lockPageScroll(), []);
+  useLayoutEffect(() => { if (enabled) return lockPageScroll(); }, [enabled]);
 }
 
 export const imageUrl = (url: string) =>
@@ -63,24 +63,26 @@ export function Modal({
   children,
   wide = false,
   variant = "default",
+  open = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
-  variant?: "default" | "product";
+  variant?: "default" | "product" | "cart";
+  open?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  usePageScrollLock();
+  usePageScrollLock(open);
   useLayoutEffect(() => {
     const d = ref.current;
-    d?.showModal();
+    if (open) d?.showModal();
     return () => d?.close();
-  }, []);
+  }, [open]);
   return (
     <dialog
       ref={ref}
-      className={"modal " + (wide ? "wide" : "") + (variant === "product" ? " product-modal" : "")}
+      className={"modal " + (wide ? "wide" : "") + (variant === "product" ? " product-modal" : variant === "cart" ? " cart-drawer" : "")}
       onCancel={(e) => {
         // File inputs also emit cancel when their native picker is dismissed.
         if (e.target !== e.currentTarget) return;
