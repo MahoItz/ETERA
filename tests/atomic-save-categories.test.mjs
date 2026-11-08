@@ -30,6 +30,36 @@ before(async () => {
 });
 after(() => db.close());
 
+test('category saves work for both administrators, while other users cannot save or change the revision', async () => {
+  const secondAdmin = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const customer = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  await db.exec(`insert into auth.users (id) values ('${secondAdmin}'), ('${customer}');
+    insert into public.profiles(id) values ('${secondAdmin}'), ('${customer}') on conflict (id) do nothing;
+    update public.profiles set role = 'admin' where id = '${secondAdmin}';`);
+  const initial = await state();
+  try {
+    await db.exec('set role authenticated');
+    for (const [user, names, originals] of [
+      [admin, ['Old', 'Keep', 'New'], ['Old', 'Keep', null]],
+      [secondAdmin, ['Old', 'Keep', 'Renamed'], ['Old', 'Keep', 'New']],
+      [admin, ['Old', 'Keep'], ['Old', 'Keep']],
+    ]) {
+      await db.query("select set_config('request.jwt.claim.sub', $1, false)", [user]);
+      const revision = (await db.query('select revision from public.category_list_state where id')).rows[0].revision;
+      const result = await save(revision, names, originals);
+      assert.deepEqual(result.names, names);
+    }
+    await assert.rejects(() => db.exec('update public.category_list_state set revision = 1'), error => error.code === '42501');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [customer]);
+    await assert.rejects(() => save(initial.revision, ['Old', 'Keep'], ['Old', 'Keep']), error => error.code === '42501');
+    const locked = await db.query('select id from public.category_list_state where id for update');
+    assert.equal(locked.rowCount, 0);
+  } finally {
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [admin]);
+  }
+});
+
 test('renaming to a removed category name is one atomic list save', async () => {
   const before = await state();
   const saved = await save(before.revision, ['Old'], ['Keep']);
@@ -42,7 +72,7 @@ test('a stale category list is rejected without changing anything', async () => 
   const before = await state();
   await db.query("insert into public.categories(name, position) values ('Concurrent', 1)");
   const changed = await state();
-  await assert.rejects(() => save(before.revision, ['Replacement'], ['Old']), (error) => error.code === '40001');
+  await assert.rejects(() => save(before.revision, ['Replacement'], ['Old']), (error) => error.code === 'PT409');
   assert.deepEqual(await state(), changed);
 });
 

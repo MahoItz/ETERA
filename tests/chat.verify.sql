@@ -54,7 +54,7 @@ begin
   begin
     perform public.chat_delete(thread,(first->'message'->>'id')::uuid);
     raise exception 'Stale delete confirmation was accepted';
-  exception when serialization_failure then null;
+  exception when sqlstate 'PT409' then null;
   end;
   perform public.chat_delete(thread,(reply->'message'->>'id')::uuid);
   perform public.chat_delete(thread,(reply->'message'->>'id')::uuid);
