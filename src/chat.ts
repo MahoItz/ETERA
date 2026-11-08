@@ -88,7 +88,7 @@ export async function loadChatDeleteSnapshot(id: string, signal: AbortSignal): P
 
 export async function deleteChat(id: string, expectedLastMessageId: string | null) {
   const { error } = await supabase.rpc("chat_delete", { target_conversation_id: id, expected_last_message_id: expectedLastMessageId });
-  if (error?.code === "40001") throw new ChatChangedError();
+  if (error?.code === "40001" || error?.code === "PT409") throw new ChatChangedError();
   check(error);
 }
 

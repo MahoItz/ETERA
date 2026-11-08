@@ -8,7 +8,7 @@ function check(error: { code?: string; message: string } | null) {
   if (error.code === "22023") throw new Error("Проверьте подборку и комментарий (до 2000 символов).");
   if (error.code === "P0001") throw new Error("Корзина вмещает до 50 фигурок. Удалите лишние позиции.");
   if (error.code === "P0002") throw new Error("Одна из фигурок больше недоступна. Обновите корзину и удалите недоступные позиции.");
-  if (error.code === "40001") throw new Error("Корзина изменилась. Обновите её перед отправкой.");
+  if (error.code === "40001" || error.code === "PT409") throw new Error("Корзина изменилась. Обновите её перед отправкой.");
   throw new Error("Не удалось связаться с сервером. Попробуйте ещё раз.");
 }
 

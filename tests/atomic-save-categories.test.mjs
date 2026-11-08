@@ -72,7 +72,7 @@ test('a stale category list is rejected without changing anything', async () => 
   const before = await state();
   await db.query("insert into public.categories(name, position) values ('Concurrent', 1)");
   const changed = await state();
-  await assert.rejects(() => save(before.revision, ['Replacement'], ['Old']), (error) => error.code === '40001');
+  await assert.rejects(() => save(before.revision, ['Replacement'], ['Old']), (error) => error.code === 'PT409');
   assert.deepEqual(await state(), changed);
 });
 
