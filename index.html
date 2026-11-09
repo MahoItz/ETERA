@@ -1,2 +1,91 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Фигурки и украшения из гипса и бетона ручной работы." /><link rel="icon" type="image/png" href="%BASE_URL%images/Favicon.png" /><title>Etera</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Фигурки и украшения из гипса и бетона ручной работы." />
+    <link rel="icon" type="image/png" href="%BASE_URL%images/Favicon.png" />
+    <title>Etera</title>
+    <script id="asset-recovery">
+      (() => {
+        // Runs before entry JS/CSS: even an obsolete entry must be recoverable.
+        const key = "etera:asset-recovery:v1";
+        const parameter = "_etera_reload";
+        const cooldown = 10 * 60 * 1000;
+        const assets = new URL("%BASE_URL%assets/", window.location.href);
+        let navigating = false;
+
+        function recover() {
+          if (navigating) return true;
+          const url = new URL(window.location.href);
+          const now = Date.now();
+          let previous = Number(url.searchParams.get(parameter));
+          try {
+            previous = Math.max(previous || 0, Number(window.sessionStorage.getItem(key)) || 0);
+          } catch {
+            // The URL marker also bounds retries when storage is unavailable.
+          }
+          if (previous > 0 && now - previous < cooldown) return false;
+          try {
+            window.sessionStorage.setItem(key, String(now));
+          } catch {
+            // Storage may be denied in private or restricted browser contexts.
+          }
+          url.searchParams.set(parameter, String(now));
+          navigating = true;
+          window.location.replace(url.href);
+          return true;
+        }
+
+        function showUnavailable() {
+          const show = () => {
+            const root = document.getElementById("root");
+            if (!root) return;
+            const main = document.createElement("main");
+            main.className = "app-unavailable";
+            main.setAttribute("role", "alert");
+            const heading = document.createElement("h1");
+            heading.textContent = "Сайт временно недоступен";
+            const message = document.createElement("p");
+            message.textContent = "Попробуйте обновить страницу немного позже.";
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = "Обновить страницу";
+            button.onclick = () => window.location.reload();
+            main.append(heading, message, button);
+            root.replaceChildren(main);
+          };
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", show, { once: true });
+          } else {
+            show();
+          }
+        }
+
+        window.addEventListener("vite:preloadError", (event) => {
+          const message = event.payload && event.payload.message;
+          // A dynamically imported module can also throw an ordinary runtime error.
+          if (typeof message === "string" && /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Unable to preload CSS/i.test(message)) {
+            if (recover()) event.preventDefault();
+          }
+        });
+
+        window.addEventListener("error", (event) => {
+          const target = event.target;
+          const script = target && target.tagName === "SCRIPT" && target.type === "module";
+          const stylesheet = target && target.tagName === "LINK" && target.rel === "stylesheet";
+          if (!script && !stylesheet) return;
+          const url = new URL(script ? target.src : target.href, window.location.href);
+          if (url.origin !== assets.origin || !url.pathname.startsWith(assets.pathname)) return;
+          if (!(script ? /\.js$/ : /\.css$/).test(url.pathname)) return;
+          if (!recover()) showUnavailable();
+        }, true);
+        // Do not clear the breaker on mount: another lazy chunk can still be stale.
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

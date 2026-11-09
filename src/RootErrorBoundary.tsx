@@ -16,6 +16,7 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, { fail
       return <main className="app-unavailable" role="alert">
         <h1>Сайт временно недоступен</h1>
         <p>Попробуйте обновить страницу немного позже.</p>
+        <button type="button" onClick={() => window.location.reload()}>Обновить страницу</button>
       </main>;
     }
     return this.props.children;
