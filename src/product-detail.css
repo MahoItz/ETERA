@@ -107,6 +107,15 @@
 .product-modal .variant-options button { background: #fff8f366; border-color: #d8bccf80; padding: 9px; border-radius: 10px; }
 .product-modal .variant-options button.selected { border-color: #946881; background: #ead3df66; }
 .product-modal .variant-options button:hover { border-color: #946881; }
+.product-modal .variant-options small { overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.product-modal .variant-options button:focus-visible { outline: 2px solid #84576f; outline-offset: 3px; }
+.product-modal .variant-options .variant-set-option { grid-column: 1 / -1; grid-template-columns: 48px minmax(0, 1fr); gap: 3px 12px; padding: 13px; border-color: #c4a1b8; background: #efdee8; border-radius: 13px; }
+.product-modal .variant-options .variant-set-option.selected { border-color: #84576f; background: #e9d1e0; box-shadow: inset 0 0 0 1px #84576f; }
+.product-modal .variant-options .variant-set-option img, .product-modal .variant-options .variant-set-option > svg { grid-row: span 3; width: 48px; height: 48px; border-radius: 9px; }
+.product-modal .variant-options .variant-set-option > span { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
+.product-modal .variant-options .variant-set-option > .variant-set-label { color: #79516c; font-size: 10px; font-weight: 600; }
+.product-modal .variant-options .variant-set-option > .image-fallback { grid-row: span 3; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 9px; padding: 3px; background: #ead3da; font-size: 8px; text-align: center; }
+.product-modal .variant-options .variant-set-option > small { white-space: normal; font-size: 11px; line-height: 1.4; }
 .product-modal .collection-selection-hint { margin: 18px 0; padding: 0; border: 0; background: transparent; border-radius: 0; font-size: 11px; }
 .product-modal .master-contacts.is-editorial { margin: 30px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .product-modal .write-to-master { display: flex; justify-content: center; width: 100%; min-height: 54px; margin: 0; border-radius: 14px; font-size: 13px; gap: 12px; }

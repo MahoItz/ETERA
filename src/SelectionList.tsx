@@ -10,7 +10,7 @@ export function SelectionList({ items }: { items: SelectionItem[] }) {
       {item.image_url && <CatalogImage src={item.image_url} alt="" loading="lazy" />}
       <div><a href={selectionPath(item, import.meta.env.BASE_URL)}>{item.variant_name || item.title}</a>
         {item.variant_name && <small>{item.title}</small>}
-        {item.sold_as_set && <small>Набор целиком</small>}
+        {item.sold_as_set && !item.variant_id && <small>Набор целиком</small>}
         <small>{selectionMoney(item.price)}</small>
       </div>
     </li>)}

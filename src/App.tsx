@@ -214,6 +214,7 @@ export default function Catalog() {
     return () => window.clearTimeout(timer);
   }, [cartNotice]);
   const selectedVariant = selected?.variants.find((variant) => variant.id === selectedVariantId) ?? null;
+  const selectingWholeSet = Boolean(selected?.soldAsSet && !selectedVariant);
   const collectionOverview = Boolean(selected?.variants.length && !selected.soldAsSet && !selectedVariant);
   const selectedMeasurements = selectedVariant ? selectedVariant.measurements ?? null : collectionOverview ? null : selected?.measurements;
   const selectedPhotos = selectedVariant ? variantPhotos(selectedVariant) : selected?.photos ?? [];
@@ -1086,16 +1087,17 @@ export default function Catalog() {
                 <span />
                 {labels[selectedVariant?.availability ?? selected.availability]}
               </span>}
-              <strong className="price">{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}{selectedVariant && <small> за штуку</small>}</strong>
+              <strong className="price">{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}{selectingWholeSet ? <small> за набор</small> : selectedVariant && <small> за штуку</small>}</strong>
               {selected.variants.length > 0 && (
-                <section className="variant-picker" aria-label="Выбор фигурки">
-                  <h3>Выберите фигурку</h3>
+                <section className="variant-picker" aria-label={selected.soldAsSet ? "Выбор набора или фигурки" : "Выбор фигурки"}>
+                  <h3>{selected.soldAsSet ? "Выберите набор или фигурку" : "Выберите фигурку"}</h3>
                   <div className="variant-options">
-                    <button type="button" className={!selectedVariant ? "selected" : ""} aria-pressed={!selectedVariant}
+                    <button type="button" className={`${selected.soldAsSet ? "variant-set-option " : ""}${!selectedVariant ? "selected" : ""}`} aria-pressed={!selectedVariant}
                       onClick={() => selectVariant(null)}>
                       {selected.photos[0] ? <CatalogImage src={imageUrl(selected.photos[0].url)} alt="" /> : <ImagePlus size={18} />}
+                      {selected.soldAsSet && <span className="variant-set-label">Набор целиком</span>}
                       <span>{selected.title}</span>
-                      <small>{selected.soldAsSet ? money(selected.price) : "Фигурки по отдельности"}</small>
+                      <small>{selected.soldAsSet ? <>{money(selected.price)} за набор</> : "Фигурки по отдельности"}</small>
                     </button>
                     {selected.variants.map((variant) => (
                       <button
@@ -1130,9 +1132,9 @@ export default function Catalog() {
               {selectedMeasurements && <SizeDiagram value={selectedMeasurements} />}
               {(selectedVariant?.description || selected.description).trim() && <p className="product-description">{selectedVariant?.description || selected.description}</p>}
               {collectionOverview && <p className="collection-selection-hint">Выберите фигурку, чтобы увидеть её фотографии, цену и размеры.</p>}
-              {!admin && <button type="button" className="button secondary cart-product-button" disabled={cart.busy || collectionOverview || selected.availability === "sold" || (!selected.soldAsSet && selectedVariant?.availability === "sold")}
+              {!admin && <button type="button" className="button secondary cart-product-button" disabled={cart.busy || collectionOverview || selected.availability === "sold" || selectedVariant?.availability === "sold"}
                 onClick={() => void addToCart(selected, selectedVariantId)}><ShoppingBag size={18} />
-                {collectionOverview ? "Выберите фигурку выше" : cart.items.some(item => item.snapshot.work_id === selected.id && item.snapshot.variant_id === cartVariantId(selected, selectedVariantId)) ? "Уже в корзине" : selected.soldAsSet ? "Добавить набор в корзину" : "Добавить в корзину"}
+                {collectionOverview ? "Выберите фигурку выше" : cart.items.some(item => item.snapshot.work_id === selected.id && item.snapshot.variant_id === cartVariantId(selected, selectedVariantId)) ? "Уже в корзине" : selectingWholeSet ? "Добавить набор в корзину" : "Добавить в корзину"}
               </button>}
               {cartNotice?.workId === selected.id && cartNotice.variantId === cartVariantId(selected, selectedVariantId) && <p className={cartNotice.error ? "form-error" : "form-success"} role={cartNotice.error ? "alert" : "status"}>{cartNotice.message} {!cartNotice.error && <button type="button" className="cart-open" onClick={openCart}>Открыть корзину</button>}</p>}
               {!admin && <MasterContacts settings={settings} compact>
@@ -1157,7 +1159,7 @@ export default function Catalog() {
           </div>
           {!admin && <div className="product-mobile-action">
             {userId && cart.items.length > 0 && <FloatingCartButton count={cart.items.length} revision={cartAdditionRevision} onOpen={openCart} />}
-            <strong>{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}</strong>
+            <strong>{collectionOverview ? catalogMoney(selected) : money(selectedPrice)}{selectingWholeSet ? <small> за набор</small> : selectedVariant && <small> за штуку</small>}</strong>
             <button type="button" className="button primary" aria-haspopup="dialog" onClick={contactMaster}><MessageCircle size={18} />Написать мастеру</button>
           </div>}
           {userId && !admin && cart.items.length > 0 && <FloatingCartButton className="product-desktop-cart" count={cart.items.length} revision={cartAdditionRevision} onOpen={openCart} />}

@@ -7,8 +7,8 @@ export type SelectionItem = {
 };
 export type CartItem = { id: string; user_id: string; created_at: string; snapshot: SelectionItem; current?: SelectionItem | null; available?: boolean };
 
-export function cartVariantId(work: Work, variantId: string | null): string | null {
-  return work.soldAsSet ? null : variantId;
+export function cartVariantId(_work: Work, variantId: string | null): string | null {
+  return variantId;
 }
 
 export function cartItemState(item: CartItem, works: Work[]): { available: boolean; selection: SelectionItem } {
@@ -16,12 +16,12 @@ export function cartItemState(item: CartItem, works: Work[]): { available: boole
   const work = works.find(work => work.id === item.snapshot.work_id);
   const variant = work?.variants.find(variant => variant.id === item.snapshot.variant_id);
   const available = Boolean(work && work.status === "published" && work.availability !== "sold" &&
-    (item.snapshot.variant_id ? variant && variant.availability !== "sold" && !work.soldAsSet
+    (item.snapshot.variant_id ? variant && variant.availability !== "sold"
       : work.soldAsSet || !work.variants.length));
   if (!available || !work) return { available: false, selection: item.snapshot };
   return { available: true, selection: {
     work_id: work.id, variant_id: variant?.id ?? null, work_slug: work.slug ?? null, variant_slug: variant?.slug ?? null,
-    title: work.title, variant_name: variant?.name ?? null, sold_as_set: Boolean(work.soldAsSet),
+    title: work.title, variant_name: variant?.name ?? null, sold_as_set: Boolean(work.soldAsSet && !variant),
     image_url: variant?.photos?.[0]?.url ?? variant?.imageUrl ?? work.photos[0]?.url ?? null,
     price: variant ? variant.price : work.price,
   } };

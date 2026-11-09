@@ -307,8 +307,8 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           <section className="work-form-section" aria-labelledby="work-detail-title">
             <div className="work-section-heading"><h3 id="work-detail-title">Детали и наличие</h3></div>
             {variants.length > 0 && <>
-              <label className="checkbox work-featured"><input type="checkbox" checked={soldAsSet} onChange={event => setSoldAsSet(event.target.checked)} disabled={busy} /><span>Набор продаётся целиком</span></label>
-              <p className="hint">{soldAsSet ? "Здесь укажите цену и размеры всего набора. У фигурок ниже — свои параметры." : "Это общий вид коллекции. Цена, наличие и размеры указываются отдельно у каждой фигурки."}</p>
+              <label className="checkbox work-featured"><input type="checkbox" checked={soldAsSet} onChange={event => setSoldAsSet(event.target.checked)} disabled={busy} /><span>Набор можно купить целиком</span></label>
+              <p className="hint">{soldAsSet ? "Здесь укажите цену и размеры всего набора, а ниже — отдельные цены, наличие и параметры фигурок." : "Это общий вид коллекции. Цена, наличие и размеры указываются отдельно у каждой фигурки."}</p>
             </>}
             {(!variants.length || soldAsSet) && <DimensionsEditor label={variants.length ? "Размеры всего набора" : "Размеры фигурки"} value={measurements} onChange={setMeasurements} suggestions={dimensionSuggestions}
               onDelete={removeSuggestion} disabled={busy || historyBusy} />}

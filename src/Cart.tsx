@@ -49,7 +49,7 @@ export function Cart({ cart, works, onSent, onOpen }: { cart: CartState; works: 
       <ul className="cart-list">{rows.map(({ item, selection, available }) => <li key={item.id}>
         {selection.image_url && <CatalogImage src={selection.image_url} alt="" loading="lazy" />}
         <div className="cart-item-copy"><strong>{selection.variant_name || selection.title}</strong>
-          {selection.variant_name && <small>{selection.title}</small>}{selection.sold_as_set && <small>Набор целиком</small>}
+          {selection.variant_name && <small>{selection.title}</small>}{selection.sold_as_set && !selection.variant_id && <small>Набор целиком</small>}
           <span>{selectionMoney(selection.price)}</span>
           {available ? <button type="button" className="cart-open" disabled={sending} onClick={() => {
             const work = works.find(work => work.id === selection.work_id); if (work) onOpen(work, selection.variant_id);

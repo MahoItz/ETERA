@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestDatabase } from './helpers/supabase-test-db.mjs';
 import { readFile } from 'node:fs/promises';
+import { selectionPath } from '../lib/cart.ts';
 
 let db;
 const customer='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', stranger='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -35,12 +36,90 @@ test('cart stores individual works, exact variants and whole sets without duplic
   assert.equal(second.snapshot.variant_id,variant);
   assert.equal(second.snapshot.variant_name,'Синий барашек');
   assert.equal(second.snapshot.price,900);
-  assert.equal((await add(set)).snapshot.sold_as_set,true);
-  assert.equal((await list()).length,3);
+  const whole=await add(set), single=await add(set,setVariant);
+  assert.equal(whole.snapshot.sold_as_set,true);
+  assert.equal(whole.snapshot.variant_id,null);
+  assert.equal(whole.snapshot.price,3000);
+  assert.notEqual(single.id,whole.id);
+  assert.equal(single.snapshot.variant_id,setVariant);
+  assert.equal(single.snapshot.variant_name,'Деталь набора');
+  assert.equal(single.snapshot.price,500);
+  assert.equal(single.snapshot.sold_as_set,false);
+  assert.equal((await add(set)).id,whole.id);
+  assert.equal((await add(set,setVariant)).id,single.id);
+  assert.equal((await list()).length,4);
   assert.deepEqual((await db.query('select * from public.chat_conversations')).rows,[]);
   await denied(()=>add(collection),'P0002');
   await denied(()=>add(work,variant),'P0002');
-  await denied(()=>add(set,setVariant),'P0002');
+  await denied(()=>add(set,variant),'P0002');
+  await denied(()=>add(collection,setVariant),'P0002');
+}));
+
+test('set and variant use exact current names, prices and links while submitted snapshots remain immutable',()=>isolated(async()=>{
+  await db.exec(`reset role; update public.works set slug='whole-set' where id='${set}';
+    update public.variants set slug='set-detail', image_url='https://example.test/detail.jpg' where id='${setVariant}';`);
+  await asUser(customer);
+  const whole=await add(set), single=await add(set,setVariant);
+  const first=await submit([whole.id,single.id]);
+  const historical=first.message.selection;
+  const selected=historical.find(x=>x.variant_id===setVariant);
+  assert.equal(selected.sold_as_set,false);
+  assert.equal(selected.image_url,'https://example.test/detail.jpg');
+  const exactLink=new URL(selectionPath(selected,'/Gips/'),'https://example.test');
+  assert.equal(exactLink.searchParams.get('work'),'whole-set');
+  assert.equal(exactLink.searchParams.get('variant'),'set-detail');
+  assert.equal(new URL(selectionPath(historical.find(x=>x.variant_id===null)),'https://example.test').searchParams.has('variant'),false);
+  await db.exec(`reset role; update public.works set price=3500 where id='${set}';
+    update public.variants set price=650, name='Обновленная деталь' where id='${setVariant}';`);
+  await asUser(customer);
+  const rows=await list();
+  const currentWhole=rows.find(x=>x.id===whole.id), currentSingle=rows.find(x=>x.id===single.id);
+  assert.equal(currentWhole.snapshot.price,3000);assert.equal(currentWhole.current.price,3500);
+  assert.equal(currentWhole.current.sold_as_set,true);
+  assert.equal(currentSingle.snapshot.price,500);assert.equal(currentSingle.current.price,650);
+  assert.equal(currentSingle.current.variant_name,'Обновленная деталь');
+  assert.equal(currentSingle.current.variant_id,setVariant);assert.equal(currentSingle.current.sold_as_set,false);
+  const next=await submit([whole.id,single.id]);
+  assert.equal(next.message.selection.find(x=>x.variant_id===setVariant).price,650);
+  assert.equal(next.message.selection.find(x=>x.variant_id===null).price,3500);
+  assert.deepEqual((await db.query('select selection from public.chat_messages where id=$1',[first.message.id])).rows[0].selection,historical);
+}));
+
+test('set variants reject unavailable, deleted and moved selections without partial submission',()=>isolated(async()=>{
+  await asUser(customer);const whole=await add(set), single=await add(set,setVariant);
+  for(const change of [
+    `update public.variants set availability='sold' where id='${setVariant}'`,
+    `update public.variants set availability='available', work_id='${collection}' where id='${setVariant}'`,
+    `delete from public.variants where id='${setVariant}'`,
+  ]){
+    await db.exec(`reset role; ${change};`);await asUser(customer);
+    await denied(()=>add(set,setVariant),'P0002');
+    const rows=await list();
+    assert.equal(rows.find(x=>x.id===whole.id).available,true);
+    const stale=rows.find(x=>x.id===single.id);
+    assert.equal(stale.available,false);assert.equal(stale.current,null);
+    assert.equal(stale.snapshot.variant_id,setVariant);assert.equal(stale.snapshot.sold_as_set,false);
+    await denied(()=>submit([whole.id,single.id]),'P0002');
+    assert.deepEqual((await db.query('select * from public.chat_messages')).rows,[]);
+    assert.deepEqual((await db.query('select * from public.chat_conversations')).rows,[]);
+  }
+  await db.exec(`reset role; update public.works set availability='sold' where id='${set}';`);await asUser(customer);
+  assert.ok((await list()).every(x=>!x.available));
+  await denied(()=>add(set),'P0002');await denied(()=>add(set,setVariant),'P0002');
+}));
+
+test('selection migration preserves historical data and private invoker privileges',()=>isolated(async()=>{
+  await asUser(customer);const item=await add(set);const sent=await submit([item.id]);
+  await db.exec('reset role');
+  const functionState=async()=>(await db.query(`select prosecdef, proconfig, proacl::text from pg_proc where oid='private.cart_selection(uuid,uuid)'::regprocedure`)).rows[0];
+  const before=await functionState();
+  assert.equal(before.prosecdef,false);assert.deepEqual(before.proconfig,['search_path=""']);
+  await db.exec(await readFile(new URL('../supabase/migrations/20261109165743_allow_set_variant_cart_selection.sql',import.meta.url),'utf8'));
+  assert.deepEqual(await functionState(),before);
+  await asUser(customer);
+  assert.deepEqual((await list())[0].snapshot,item.snapshot);
+  assert.deepEqual((await db.query('select selection from public.chat_messages where id=$1',[sent.message.id])).rows[0].selection,sent.message.selection);
+  await denied(()=>db.query('select private.cart_selection($1,$2)',[set,setVariant]));
 }));
 
 test('cart is private including from master; writes cannot be forged, own items can be removed',()=>isolated(async()=>{

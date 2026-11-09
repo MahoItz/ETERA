@@ -10,13 +10,29 @@ test('deleted and sold selections retain their label and cannot be sent',()=>{
   assert.equal(cartItemState(item,[{...work,availability:'sold'}]).available,false);
   assert.equal(cartItemState(item,[]).selection.title,'Фея');
 });
-test('whole sets normalize to the set, collections require a specific surviving variant',()=>{
-  assert.equal(cartVariantId({...work,soldAsSet:true},'variant'),null);
+test('whole sets and their exact variants remain separate selections',()=>{
+  assert.equal(cartVariantId({...work,soldAsSet:true},'variant'),'variant');
+  assert.equal(cartVariantId({...work,soldAsSet:true},null),null);
   const collection={...work,variants:[{id:'variant',name:'Синяя',price:200,imageUrl:null,availability:'available' as const,position:0}]};
   assert.equal(cartItemState(item,[collection]).available,false);
   const selected={...item,snapshot:{...item.snapshot,variant_id:'variant'}};
   assert.equal(cartItemState(selected,[collection]).selection.variant_name,'Синяя');
-  assert.equal(cartItemState(selected,[{...collection,soldAsSet:true}]).available,false);
+  const set={...collection,soldAsSet:true};
+  const whole=cartItemState(item,[set]);
+  assert.equal(whole.available,true);
+  assert.equal(whole.selection.variant_id,null);
+  assert.equal(whole.selection.price,100);
+  assert.equal(whole.selection.sold_as_set,true);
+  const single=cartItemState(selected,[set]);
+  assert.equal(single.available,true);
+  assert.equal(single.selection.variant_id,'variant');
+  assert.equal(single.selection.variant_name,'Синяя');
+  assert.equal(single.selection.price,200);
+  assert.equal(single.selection.sold_as_set,false);
+  const path=new URL(selectionPath(single.selection),'https://example.test');
+  assert.equal(path.searchParams.get('variant'),'variant');
+  assert.equal(cartItemState(selected,[{...set,variants:[]}]).available,false);
+  assert.equal(cartItemState(selected,[{...set,variants:[{...set.variants[0],availability:'sold'}]}]).available,false);
 });
 test('fresh server availability and price take precedence over a stale catalogue',()=>{
   assert.equal(cartItemState({...item,available:false,current:null},[work]).available,false);
