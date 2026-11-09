@@ -64,6 +64,7 @@ export function Modal({
   wide = false,
   variant = "default",
   open = true,
+  closeDisabled = false,
 }: {
   title: string;
   onClose: () => void;
@@ -71,6 +72,7 @@ export function Modal({
   wide?: boolean;
   variant?: "default" | "product" | "cart";
   open?: boolean;
+  closeDisabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   usePageScrollLock(open);
@@ -87,16 +89,16 @@ export function Modal({
         // File inputs also emit cancel when their native picker is dismissed.
         if (e.target !== e.currentTarget) return;
         e.preventDefault();
-        onClose();
+        if (!closeDisabled) onClose();
       }}
       onClick={(e) => {
-        if (e.target === ref.current) onClose();
+        if (e.target === ref.current && !closeDisabled) onClose();
       }}
       aria-label={title}
     >
       <div className={variant === "product" ? "product-modal-close" : "modal-head"}>
         {variant !== "product" && <h2>{title}</h2>}
-        <button className="icon-button" onClick={onClose} aria-label="Закрыть">
+        <button className="icon-button" onClick={onClose} disabled={closeDisabled} aria-label="Закрыть">
           <X size={22} />
         </button>
       </div>

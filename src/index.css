@@ -441,6 +441,10 @@ dd { margin: 0; }
 .auth-forgot { display: block; margin: -8px 0 20px auto; border: 0; border-bottom: 1px solid currentColor; padding: 8px 2px; background: transparent; color: #70445f; font-size: 12px; }
 .auth-forgot:hover, .auth-switch:hover { color: var(--ink); }
 .auth-form .form-footer { flex-wrap: wrap; }
+.auth-confirmation { text-align: center; }
+.auth-confirmation-icon { display: grid; place-items: center; width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 50%; color: #4f765b; background: #deecdc; }
+.auth-confirmation-email { margin: 16px 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.auth-confirmation .form-footer .button { width: 100%; }
 .favorite-detail { margin-bottom: 10px; }
 .favorite-detail-group { margin-bottom: 10px; }
 .favorite-feedback { margin: 0 0 10px; }

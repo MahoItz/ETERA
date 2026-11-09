@@ -45,6 +45,7 @@ import {
   Images,
   Eye,
   LogOut,
+  Mail,
   MessageCircle,
   Plus,
   Pencil,
@@ -1800,6 +1801,11 @@ function LoginEditor({
   const registration = mode === "registration";
   const recovery = mode === "recovery";
   const submitting = useRef(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
+  const acknowledgeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (confirmationEmail) acknowledgeButton.current?.focus();
+  }, [confirmationEmail]);
   const [resendCooldown, setResendCooldown] = useState(0);
   useEffect(() => {
     if (!resendCooldown) return;
@@ -1824,7 +1830,10 @@ function LoginEditor({
       } else if (registration) {
         const result = await signUp(email, password, nickname);
         if (result.session) await onLoggedIn();
-        else setMessage("Проверьте почту: мы отправили ссылку для подтверждения регистрации.");
+        else {
+          setPassword("");
+          setConfirmationEmail(email.trim());
+        }
       } else {
         await signIn(email, password);
         await onLoggedIn();
@@ -1838,12 +1847,24 @@ function LoginEditor({
   }
   return (
     <Modal
-      title={recovery ? "Восстановление пароля" : registration ? "Регистрация" : "Вход"}
+      title={confirmationEmail ? "Подтвердите почту" : recovery ? "Восстановление пароля" : registration ? "Регистрация" : "Вход"}
+      closeDisabled={busy || !!confirmationEmail}
       onClose={() => {
         if (!busy) onClose();
       }}
     >
-      <form className="editor-form auth-form" onSubmit={submit}>
+      {confirmationEmail ? <div className="editor-form auth-confirmation">
+        <div className="auth-confirmation-icon" aria-hidden="true"><Mail size={32} /></div>
+        <div role="status">
+          <p className="form-intro">Для завершения регистрации перейдите по ссылке в письме, которое мы отправили на</p>
+          <p className="auth-confirmation-email">{confirmationEmail}</p>
+          <p className="form-intro">После подтверждения почты вы сможете войти в аккаунт.</p>
+          <p className="hint">Если письма нет во входящих, проверьте папку «Спам».</p>
+        </div>
+        <div className="form-footer">
+          <button ref={acknowledgeButton} type="button" className="button primary" onClick={onClose}>Понятно</button>
+        </div>
+      </div> : <form className="editor-form auth-form" onSubmit={submit}>
         <p className="form-intro">
           {recovery ? "Укажите email вашего аккаунта. Мы отправим ссылку, по которой можно задать новый пароль." : registration ? "Создайте аккаунт, чтобы сохранять понравившиеся работы." : "Введите email и пароль своего аккаунта."}
         </p>
@@ -1916,7 +1937,7 @@ function LoginEditor({
         >
           {recovery ? "Вернуться ко входу" : registration ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
         </button>
-      </form>
+      </form>}
     </Modal>
   );
 }
