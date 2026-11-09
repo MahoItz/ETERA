@@ -48,7 +48,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 ::selection { background: #e1b9dd; color: var(--ink); }
 .header { padding: 10px var(--gutter); display: flex; gap: 36px; align-items: center; }
 .brand { display: flex; align-items: center; flex-shrink: 0; }
-.brand-logo { width: 190px; height: auto; }
+.brand-logo { width: 160px; height: auto; }
 .header nav { display: flex; gap: 34px; margin-left: auto; font-size: 12px; }
 .header nav[hidden] { display: none; }
 .account-header > .account-menu, .account-header > .admin-toggle { margin-left: auto; }

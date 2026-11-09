@@ -33,6 +33,7 @@ import {
 const PhotoLightbox = lazy(() => import("./PhotoLightbox").then((module) => ({ default: module.PhotoLightbox })));
 const WorkEditor = lazy(() => import("./WorkEditor").then((module) => ({ default: module.WorkEditor })));
 const AdminAccount = lazy(() => import("./AdminAccount").then((module) => ({ default: module.AdminAccount })));
+const HeroCarouselEditor = lazy(() => import("./HeroCarouselEditor").then((module) => ({ default: module.HeroCarouselEditor })));
 import {
   ArrowRight,
   Check,
@@ -85,6 +86,7 @@ import {
   renewUploadedPhoto,
   saveTreeOrnament,
   saveTreeOrnamentOrder,
+  saveHeroCarousel,
   deleteTreeOrnament,
 } from "./catalog";
 const money = (n: number | null) =>
@@ -163,6 +165,8 @@ export default function Catalog() {
   } | null>(null);
   const [ornaments, setOrnaments] = useState<TreeOrnament[]>([]);
   const [treeEditor, setTreeEditor] = useState(false);
+  const [carouselEditor, setCarouselEditor] = useState(false);
+  const [carouselWorkIds, setCarouselWorkIds] = useState<string[] | null>(null);
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
@@ -233,6 +237,7 @@ export default function Catalog() {
       const favorites = currentSession ? await loadFavoriteWorkIds() : new Set<string>();
       setWorks(data.works);
       setOrnaments(data.ornaments);
+      setCarouselWorkIds(data.carouselWorkIds);
       setSettings(data.settings);
       setAdmin(Boolean(adminSession));
       setUserEmail(currentSession?.user.email ?? null);
@@ -518,6 +523,7 @@ export default function Catalog() {
     setCategory("");
     setEditing(undefined);
     setTreeEditor(false);
+    setCarouselEditor(false);
     setSettingsSection(null);
     closeWork();
     if (accountMenu.current) accountMenu.current.open = false;
@@ -548,6 +554,7 @@ export default function Catalog() {
       closeWork();
       setEditing(undefined);
       setTreeEditor(false);
+      setCarouselEditor(false);
       setSettingsSection(null);
       setScope("published");
       setCategory("");
@@ -755,8 +762,9 @@ export default function Catalog() {
             <Settings2 size={16} />Управление украшениями
           </button>
         ) : undefined}
-      /> : <StandardHero works={works} ready={!loading && !error} loading={loading} onOpen={open}
-        stopMotion={selected !== null || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
+      /> : <StandardHero works={works} selectedIds={carouselWorkIds} ready={!loading && !error} loading={loading} onOpen={open}
+        editorActions={canEdit ? <button type="button" className="button secondary" disabled={loading || !!error} aria-haspopup="dialog" onClick={() => setCarouselEditor(true)}><Settings2 size={16} aria-hidden="true" />Карточки карусели</button> : undefined}
+        stopMotion={selected !== null || carouselEditor || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
       <main id="catalog" className="catalog-section">
         <div className="section-top" data-reveal>
@@ -1175,6 +1183,15 @@ export default function Catalog() {
           onDeleted={removeWork}
         /></Suspense>
       )}
+      {canEdit && carouselEditor && <Suspense fallback={null}><HeroCarouselEditor works={works} selectedIds={carouselWorkIds}
+        onClose={() => setCarouselEditor(false)}
+        onSave={async (ids) => {
+          const savedIds = await saveHeroCarousel(carouselWorkIds, ids);
+          setCarouselWorkIds(savedIds);
+          setCarouselEditor(false);
+          setNotice("Карточки карусели сохранены.");
+        }}
+      /></Suspense>}
       {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments}
         onClose={() => setTreeEditor(false)}
         onSaved={(item) => setOrnaments((items) => [...items.filter((i) => i.id !== item.id), item].sort((a, b) => a.position - b.position))}
@@ -1643,7 +1660,7 @@ function SettingsEditor({
                 <option value="new-year">Новогодний — ёлка с украшениями</option>
               </select>
             </label>
-            <p id="site-hero-mode-hint" className="hint">Режим применяется для всех посетителей после сохранения. В обычной шапке показываются опубликованные работы с фотографиями, сначала — избранные.</p>
+            <p id="site-hero-mode-hint" className="hint">Режим применяется для всех посетителей после сохранения. Состав и порядок обычной карусели можно настроить кнопкой «Карточки карусели» в шапке. Автоподбор показывает сначала избранные, затем новые работы.</p>
             <label htmlFor="site-instagram">
               Instagram
               <input

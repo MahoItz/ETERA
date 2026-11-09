@@ -35,3 +35,26 @@ test('carousel wraps around and keeps small collections free of duplicate cards'
     }
   }
 });
+
+test('manual selection keeps exact order without automatic additions, and empty stays empty', () => {
+  assert.deepEqual(heroItems(seed, [seed[1].id, seed[0].id]).map((work) => work.id), [seed[1].id, seed[0].id]);
+  assert.deepEqual(heroItems(seed, [seed[1].id]).map((work) => work.id), [seed[1].id]);
+  assert.deepEqual(heroItems(seed, []), []);
+  assert.deepEqual(heroItems(seed, null), heroItems(seed));
+});
+
+test('manual selection excludes stale, hidden, sold and photoless works, deduplicates and limits to ten', () => {
+  const works: Work[] = [
+    ...seed,
+    { ...seed[0], id: 'draft', status: 'draft' },
+    { ...seed[0], id: 'archived', status: 'archived' },
+    { ...seed[0], id: 'sold', availability: 'sold' },
+    { ...seed[0], id: 'no-photo', photos: [] },
+  ];
+  const ids = ['missing', 'draft', 'archived', 'sold', 'no-photo', seed[1].id, seed[1].id, seed[0].id];
+  assert.deepEqual(heroItems(works, ids).map((work) => work.id), [seed[1].id, seed[0].id]);
+  assert.deepEqual(heroItems(works, ['missing', 'sold']), []);
+  assert.equal(ids.length, 8);
+  const many = Array.from({ length: 12 }, (_, index) => ({ ...seed[0], id: String(index) }));
+  assert.deepEqual(heroItems(many, many.map((work) => work.id).reverse()).map((work) => work.id), ['11', '10', '9', '8', '7', '6', '5', '4', '3', '2']);
+});

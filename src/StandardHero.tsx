@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Flower2 } from "lucide-react";
 import { type Work } from "../lib/model";
 import { CatalogImage } from "./CatalogImage";
@@ -7,10 +7,11 @@ import { imageUrl } from "./EditorUI";
 import { carouselOffset, heroItems } from "./hero-items";
 import "./standard-hero.css";
 
-export function StandardHero({ works, ready, loading, onOpen, stopMotion }: {
+export function StandardHero({ works, selectedIds, editorActions, ready, loading, onOpen, stopMotion }: {
   works: Work[]; ready: boolean; loading: boolean; onOpen: (work: Work) => void; stopMotion: boolean;
+  selectedIds?: string[] | null; editorActions?: ReactNode;
 }) {
-  const items = heroItems(works);
+  const items = heroItems(works, selectedIds);
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = Math.max(0, items.findIndex((item) => item.id === activeId));
   const [reduced, setReduced] = useState(true);
@@ -78,13 +79,11 @@ export function StandardHero({ works, ready, loading, onOpen, stopMotion }: {
     <section ref={root} className="standard-hero" aria-label="Авторский декор ручной работы"
       style={{ "--standard-hero-background": `url("${import.meta.env.BASE_URL}images/hero-standard-background.webp")` } as CSSProperties}>
       <div className="standard-hero-copy">
-        <p className="standard-hero-eyebrow"><span aria-hidden="true" />Маленькая мастерская. Большие чувства.</p>
         <h1>Вещи, в которых<br /><em>живёт</em> <span>тепло.</span></h1>
-        <p className="standard-hero-description">Немного гипса. Много фантазии.<br />И маленькая история для вашего дома.</p>
-        <a className="standard-hero-cta" href="#catalog">Найти свою историю<span><ArrowUpRight size={22} /></span></a>
-        <p className="standard-hero-note"><span aria-hidden="true" />Продумано. Стильно. Расписано вручную.</p>
+        <p className="standard-hero-description">Декор из гипса с ручной росписью. Для дома и особенных подарков.</p>
+        <a className="standard-hero-cta" href="#catalog">Перейти в каталог<span><ArrowUpRight size={22} aria-hidden="true" /></span></a>
       </div>
-      <div className="standard-carousel" role="region" aria-roledescription="карусель" aria-label="Работы мастерской"
+      <div className={`standard-carousel${editorActions ? " has-editor" : ""}`} role="region" aria-roledescription="карусель" aria-label="Работы мастерской"
         onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
         onFocusCapture={() => setFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
         onKeyDown={(event) => {
@@ -119,6 +118,7 @@ export function StandardHero({ works, ready, loading, onOpen, stopMotion }: {
             </div>
           </div>
         </>}
+        {editorActions && <div className="standard-carousel-editor-actions">{editorActions}</div>}
         <span className="sr-only" aria-live={focused ? "polite" : "off"} aria-atomic="true">{count ? `${active + 1} из ${count}. ${items[active].title}` : ""}</span>
       </div>
     </section>

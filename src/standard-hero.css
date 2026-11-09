@@ -4,9 +4,8 @@
   display: grid;
   grid-template-columns: minmax(0, .95fr) minmax(0, 1.65fr);
   align-items: center;
-  gap: clamp(20px, 3vw, 60px);
-  min-height: clamp(510px, 33vw, 660px);
-  padding: 48px var(--gutter) 58px;
+  gap: clamp(20px, 3vw, 44px);
+  padding: 24px var(--gutter);
   overflow: hidden;
   border-radius: 0 0 55px 55px / 0 0 35px 35px;
   background: #392635;
@@ -22,25 +21,24 @@
   background-size: cover;
 }
 .standard-hero-copy { position: relative; z-index: 10; min-width: 0; }
-.standard-hero-eyebrow { display: flex; align-items: center; gap: 12px; font-size: 8px; line-height: 1.8; letter-spacing: 2.4px; text-transform: uppercase; margin-bottom: 32px; }
-.standard-hero-eyebrow > span { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: var(--peach); }
-.standard-hero h1 { margin-bottom: 24px; font-size: clamp(40px, 3.8vw, 76px); line-height: 1.03; letter-spacing: -1.9px; }
+.standard-hero h1 { margin-bottom: 18px; font-size: clamp(32px, 3.8vw, 54px); line-height: 1.06; letter-spacing: -1.5px; }
 .standard-hero h1 em { color: var(--peach); font-weight: 400; }
 .standard-hero h1 > span { color: #dec8ee; }
-.standard-hero-description { margin-bottom: 27px; font-family: var(--serif); font-size: clamp(17px, 1.2vw, 22px); line-height: 1.5; color: #f2dfe3; }
-.standard-hero-cta { display: inline-flex; align-items: center; gap: 28px; min-height: 54px; padding: 6px 7px 6px 25px; border-radius: 40px; background: var(--peach); color: #392635; font-size: 13px; transition: background .2s, transform .2s; }
-.standard-hero-cta > span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #3d293c; color: var(--peach); }
+.standard-hero-description { max-width: 370px; margin-bottom: 22px; font-family: var(--serif); font-size: clamp(17px, 1.2vw, 20px); line-height: 1.5; color: #f2dfe3; }
+.standard-hero-cta { display: inline-flex; align-items: center; gap: 24px; min-height: 48px; padding: 5px 6px 5px 22px; border-radius: 40px; background: var(--peach); color: #392635; font-size: 13px; transition: background .2s, transform .2s; }
+.standard-hero-cta > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #3d293c; color: var(--peach); }
 .standard-hero-cta:hover { background: #ffd0b6; transform: translateY(-2px); }
-.standard-hero-note { display: flex; align-items: center; gap: 13px; margin: 30px 0 0; font-size: 10px; line-height: 1.6; color: #dfcbd7; }
-.standard-hero-note > span { width: 36px; height: 1px; flex-shrink: 0; background: #b49baa; }
-.standard-carousel { position: relative; justify-self: center; min-width: 0; width: 100%; max-width: 936px; padding: 8px 22px 38px; }
-.standard-carousel-stage { position: relative; width: 100%; aspect-ratio: 1.75; min-height: 350px; max-height: 510px; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; }
+.standard-carousel { --stage-height: clamp(280px, 24.3vw, 350px); position: relative; justify-self: center; min-width: 0; width: 100%; max-width: 936px; padding: 0 22px; }
+.standard-carousel-editor-actions { position: relative; z-index: 11; display: flex; justify-content: center; margin-top: 8px; }
+.standard-carousel-editor-actions .button { min-height: 44px; padding: 8px 16px; border: 1px solid #fff1df; background: #e6d4f0; color: #392635; box-shadow: 0 3px 12px #160c1d30; font-size: 12px; }
+.standard-carousel-editor-actions .button:hover:not(:disabled) { background: #f4e7fa; border-color: #f2b89d; }
+.standard-hero :is(button, a):focus-visible { outline: 3px solid #fff0dc; outline-offset: 4px; }
+.standard-carousel-stage { position: relative; width: 100%; height: var(--stage-height); touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; }
 .standard-hero-card {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 38%;
-  max-width: 350px;
+  width: min(44%, calc((var(--stage-height) - 66px) * .84));
   padding: 9px 9px 0;
   border: 1px solid #ffe9d3;
   border-radius: 48% 48% 24px 24px / 8% 8% 24px 24px;
@@ -61,48 +59,49 @@
 .standard-card-caption { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 10px 12px; font-size: 12px; line-height: 1.4; }
 .standard-card-caption > span { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .standard-card-caption > svg { flex-shrink: 0; }
-.standard-carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 2px solid #eed4eb; border-radius: 50%; background: #3d293ce8; color: #fff1e2; transition: background .2s; }
+.standard-carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 2px solid #eed4eb; border-radius: 50%; background: #3d293ce8; color: #fff1e2; transition: background .2s; }
 .standard-carousel-arrow:hover { background: #73516d; }
 .standard-carousel-arrow.is-previous { left: -22px; }
 .standard-carousel-arrow.is-next { right: -22px; }
-.standard-carousel-controls { position: absolute; bottom: -3px; left: 0; right: 0; z-index: 10; display: flex; justify-content: center; align-items: center; gap: 12px; min-height: 36px; }
+.standard-carousel-controls { position: relative; z-index: 10; display: flex; justify-content: center; align-items: center; min-height: 36px; }
 .standard-carousel-dots { display: flex; align-items: center; justify-content: center; }
-.standard-carousel-dots > button { display: grid; place-items: center; width: 26px; height: 36px; padding: 0; border: 0; background: transparent; color: #f4d9b6; }
+.standard-carousel-dots > button { display: grid; place-items: center; width: 32px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #f4d9b6; }
 .standard-carousel-dots > button > span { width: 6px; height: 6px; border-radius: 50%; background: #e8c8df80; transition: transform .3s, background .3s; }
 .standard-carousel-dots > button[aria-pressed=true] > span { background: #ffe5bd; transform: scale(1.65); box-shadow: 0 0 12px #ffd99870; }
 .standard-carousel-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; height: 100%; padding: 25px; text-align: center; color: #ead6ee; }
 .standard-carousel-empty > span { font-family: var(--serif); font-style: italic; font-size: 29px; }
 .standard-carousel-empty > p { max-width: 260px; margin: 0; font-size: 12px; line-height: 1.7; }
 @media (min-width: 1800px) { .standard-hero { padding-left: max(var(--gutter), calc((100vw - 1600px) / 2)); padding-right: max(var(--gutter), calc((100vw - 1600px) / 2)); } }
-@media (min-width: 901px) and (max-width: 1100px) {
-  .standard-hero { gap: 10px; padding-left: 32px; padding-right: 32px; }
-  .standard-hero h1 { font-size: 40px; }
+@media (min-width: 701px) and (max-width: 1100px) {
+  .standard-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; padding-left: 28px; padding-right: 28px; }
+  .standard-hero h1 { font-size: clamp(32px, 3.8vw, 40px); }
   .standard-card-caption { padding-left: 4px; padding-right: 4px; gap: 6px; font-size: 11px; }
 }
-@media (max-width: 900px) {
-  .standard-hero { grid-template-columns: 1fr; gap: 32px; padding: 40px 32px 34px; }
+@media (max-width: 700px) {
+  .standard-hero { grid-template-columns: 1fr; gap: 16px; padding: 20px 24px; }
   .standard-hero-copy { width: min(100%, 650px); margin: 0 auto; }
-  .standard-hero h1 { font-size: clamp(44px, 7vw, 64px); }
-  .standard-hero-eyebrow { margin-bottom: 24px; }
-  .standard-hero-note { margin-top: 22px; }
-  .standard-carousel { max-width: 720px; margin: 0 auto; }
-  .standard-carousel-stage { aspect-ratio: auto; height: clamp(335px, 62vw, 480px); }
-  .standard-hero-card { width: 40%; max-width: 320px; }
+  .standard-hero h1 { font-size: clamp(32px, 6.8vw, 42px); margin-bottom: 14px; }
+  .standard-hero-description { max-width: 410px; margin-bottom: 16px; }
+  .standard-carousel { --stage-height: 270px; max-width: 540px; margin: 0 auto; }
+  .standard-hero-card { width: min(50%, 190px); }
 }
 @media (max-width: 480px) {
-  .standard-hero { padding: 34px 20px 30px; gap: 30px; border-radius: 0 0 30px 30px; }
-  .standard-hero h1 { font-size: clamp(36px, 10.7vw, 48px); letter-spacing: -1.3px; }
-  .standard-hero-eyebrow { font-size: 7px; letter-spacing: 1.5px; gap: 8px; }
+  .standard-hero { padding: 20px; border-radius: 0 0 30px 30px; }
+  .standard-hero h1 { font-size: clamp(32px, 9.5vw, 42px); letter-spacing: -1.1px; }
   .standard-hero-description { font-size: 17px; }
-  .standard-hero-note { font-size: 9px; gap: 10px; }
-  .standard-carousel { padding: 0 0 38px; }
-  .standard-carousel-stage { height: 325px; min-height: 325px; }
-  .standard-hero-card { width: 65%; max-width: 245px; padding: 6px 6px 0; transform: translate(calc(-50% + var(--card-offset) * 55%), calc(-50% + var(--card-distance) * 5px)) perspective(1000px) rotateY(calc(var(--card-offset) * -22deg)) scale(calc(1 - var(--card-distance) * .2)); }
+  .standard-carousel { --stage-height: 270px; padding: 0; }
+  .standard-hero-card { width: min(65%, 190px); padding: 6px 6px 0; transform: translate(calc(-50% + var(--card-offset) * 55%), calc(-50% + var(--card-distance) * 5px)) perspective(1000px) rotateY(calc(var(--card-offset) * -22deg)) scale(calc(1 - var(--card-distance) * .2)); }
   .standard-card-caption { min-height: 48px; font-size: 11px; padding: 9px 5px; gap: 7px; }
   .standard-card-caption > svg { width: 18px; }
-  .standard-carousel-arrow { width: 42px; height: 42px; }
   .standard-carousel-arrow.is-previous { left: 0; }
   .standard-carousel-arrow.is-next { right: 0; }
-  .standard-carousel-dots > button { width: 22px; }
-  .standard-carousel-controls { gap: 4px; }
+}
+.standard-hero + .winter-values { padding-top: 14px; padding-bottom: 14px; }
+.standard-hero + .winter-values small { margin-top: 5px; }
+@media (max-width: 700px) {
+  .standard-hero + .winter-values { padding-top: 12px; padding-bottom: 12px; }
+  .standard-hero + .winter-values > div { gap: 6px; }
+  .standard-hero + .winter-values svg { width: 20px; height: 20px; }
+  .standard-hero + .winter-values span { font-size: 9px; letter-spacing: .5px; }
+  .standard-hero + .winter-values small { display: none; }
 }

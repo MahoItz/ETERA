@@ -85,6 +85,7 @@ function mapWork(row: WorkRow): Work {
 export async function loadCatalog(): Promise<{
   works: Work[];
   ornaments: TreeOrnament[];
+  carouselWorkIds: string[] | null;
   settings: Settings;
   initialized: boolean;
 }> {
@@ -96,7 +97,7 @@ export async function loadCatalog(): Promise<{
       .order("updated_at", { ascending: false }),
     supabase
       .from("site_settings")
-      .select("name, contact, vk, telegram, phone, hero_mode")
+      .select("*")
       .eq("id", true)
       .maybeSingle(),
     supabase.from("categories").select("name").order("position").order("name"),
@@ -111,6 +112,7 @@ export async function loadCatalog(): Promise<{
   return {
     works: ((worksResult.data ?? []) as WorkRow[]).map(mapWork),
     ornaments: (ornamentsResult.data ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
+    carouselWorkIds: settingsResult.data?.hero_work_ids ?? null,
     settings: {
       name: settingsResult.data?.name ?? defaults.name,
       contact: settingsResult.data?.contact ?? "",
@@ -208,6 +210,32 @@ export async function saveTreeOrnament(input: TreeOrnament): Promise<TreeOrnamen
 export async function deleteTreeOrnament(id: string) {
   const result = await supabase.from("tree_ornaments").delete().eq("id", id);
   fail(result.error);
+}
+
+export async function saveHeroCarousel(expectedIds: string[] | null, orderedIds: string[] | null): Promise<string[] | null> {
+  if (orderedIds !== null && (orderedIds.length > 10 || new Set(orderedIds).size !== orderedIds.length
+    || orderedIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))) {
+    throw new Error("Выберите до 10 разных работ для карусели.");
+  }
+  const result = await supabase.rpc("save_hero_carousel", { expected_ids: expectedIds, ordered_ids: orderedIds });
+  if (result.error) {
+    const code = result.error.code;
+    throw new Error(code === "PGRST202" || code === "42883" || code === "42703"
+      ? "Для сохранения карусели нужно применить обновление базы данных. Ваш выбор остался в редакторе."
+      : code === "40001" || code === "PT409"
+        ? "Карусель уже изменили на другом устройстве. Закройте редактор и обновите каталог."
+        : code === "42501"
+          ? "Изменять карусель может только администратор. Войдите в аккаунт заново."
+          : code === "22023" || code === "22P02"
+            ? "Выберите до 10 разных опубликованных работ с фотографиями. Проданные и удалённые работы недоступны."
+            : "Не удалось сохранить карусель. Проверьте соединение и попробуйте снова.");
+  }
+  const saved = result.data;
+  if (!saved || typeof saved !== "object" || !("ids" in saved) || (saved.ids !== null
+    && (!Array.isArray(saved.ids) || saved.ids.some((id: unknown) => typeof id !== "string")))) {
+    throw new Error("Не получен результат сохранения карусели. Обновите каталог, чтобы проверить изменения.");
+  }
+  return saved.ids;
 }
 
 export async function saveTreeOrnamentOrder(previous: TreeOrnament[], ordered: TreeOrnament[]) {
