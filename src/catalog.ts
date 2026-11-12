@@ -4,6 +4,7 @@ import { defaults, type Settings, type Variant, type Work } from "../lib/model";
 import { normalizeContacts } from "../lib/contacts";
 import { supabase } from "./supabase";
 import { passwordRecoveryError, passwordRecoveryRedirect } from "../lib/password-recovery";
+import { signInError } from "../lib/sign-in-error";
 import type { TreeOrnament } from "./tree-items";
 import { WorkSaveError, type WorkSaveRequest } from "./work-save";
 import { renewPhotoUpload, storagePathFromUrl as photoStoragePath, uploadProtectedPhoto } from "./work-photo-cleanup";
@@ -366,12 +367,14 @@ export async function getSession(): Promise<Session | null> {
 }
 
 export async function signIn(email: string, password: string) {
-  const result = await supabase.auth.signInWithPassword({ email, password });
-  if (result.error?.code === "email_not_confirmed" || result.error?.message === "Email not confirmed") {
-    throw new Error("Почта не подтверждена. Откройте письмо, отправленное при регистрации, и перейдите по ссылке для подтверждения. Если письма нет во входящих, проверьте папку «Спам».");
+  let result;
+  try {
+    result = await supabase.auth.signInWithPassword({ email, password });
+  } catch (error) {
+    throw new Error(signInError(error));
   }
-  fail(result.error);
-  if (!result.data.session) throw new Error("Supabase не вернул сессию.");
+  if (result.error) throw new Error(signInError(result.error));
+  if (!result.data.session) throw new Error(signInError(null));
   return result.data.session;
 }
 
