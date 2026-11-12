@@ -28,6 +28,9 @@ body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(
 .account-access h1 { font-size: 38px; }
 .account-access p { line-height: 1.8; color: var(--muted); }
 .account-access-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.catalog-load-warning { margin: 16px var(--gutter); padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: #f3dcd7; line-height: 1.7; overflow-wrap: anywhere; }
+.catalog-load-warning p { margin-bottom: 10px; }
+.catalog-load-warning .button { max-width: 100%; white-space: normal; }
 @media (max-width: 760px) { .account-access { margin: 24px 20px; padding: 10px; } }
 .image-fallback { display: grid; place-items: center; width: 100%; height: 100%; min-height: 64px; padding: 12px; background: #ead8df; color: #705565; font-size: 11px; line-height: 1.4; text-align: center; }
 button, input, select, textarea { font: inherit; }

@@ -88,8 +88,10 @@ export async function loadCatalog(): Promise<{
   carouselWorkIds: string[] | null;
   settings: Settings;
   initialized: boolean;
+  metadataReady: boolean;
+  warnings: string[];
 }> {
-  const [worksResult, settingsResult, categoriesResult, categoryStateResult, ornamentsResult] = await Promise.all([
+  const [worksRequest, settingsRequest, categoriesRequest, categoryStateRequest, ornamentsRequest] = await Promise.allSettled([
     supabase
       .from("works")
       .select("*, category:categories(name), photos(*), variants(*, photos(*))")
@@ -104,27 +106,37 @@ export async function loadCatalog(): Promise<{
     supabase.from("category_list_state").select("revision").eq("id", true).single(),
     supabase.from("tree_ornaments").select("*").order("position").order("created_at"),
   ]);
-  fail(worksResult.error);
-  fail(settingsResult.error);
-  fail(categoriesResult.error);
-  fail(categoryStateResult.error);
-  fail(ornamentsResult.error);
+  if (worksRequest.status !== "fulfilled" || worksRequest.value.error) {
+    throw new Error("Не удалось загрузить каталог. Проверьте соединение и попробуйте снова.");
+  }
+  const works = ((worksRequest.value.data ?? []) as WorkRow[]).map(mapWork);
+  const settings = settingsRequest.status === "fulfilled" && !settingsRequest.value.error ? settingsRequest.value.data : null;
+  const categories = categoriesRequest.status === "fulfilled" && !categoriesRequest.value.error ? categoriesRequest.value.data : null;
+  const categoryState = categoryStateRequest.status === "fulfilled" && !categoryStateRequest.value.error ? categoryStateRequest.value.data : null;
+  const ornaments = ornamentsRequest.status === "fulfilled" && !ornamentsRequest.value.error ? ornamentsRequest.value.data : null;
+  const metadataReady = settings !== null && categories !== null && categoryState !== null && ornaments !== null;
   return {
-    works: ((worksResult.data ?? []) as WorkRow[]).map(mapWork),
-    ornaments: (ornamentsResult.data ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
-    carouselWorkIds: settingsResult.data?.hero_work_ids ?? null,
+    works,
+    ornaments: (ornaments ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
+    carouselWorkIds: settings?.hero_work_ids ?? null,
     settings: {
-      name: settingsResult.data?.name ?? defaults.name,
-      contact: settingsResult.data?.contact ?? "",
-      vk: settingsResult.data?.vk ?? "",
-      telegram: settingsResult.data?.telegram ?? "",
-      phone: settingsResult.data?.phone ?? "",
-      heroMode: settingsResult.data?.hero_mode === "new-year" ? "new-year" : defaults.heroMode,
-      categories: (categoriesResult.data ?? []).map((c) => c.name),
-      categoryRevision: categoryStateResult.data?.revision ?? defaults.categoryRevision,
+      name: settings?.name ?? defaults.name,
+      contact: settings?.contact ?? "",
+      vk: settings?.vk ?? "",
+      telegram: settings?.telegram ?? "",
+      phone: settings?.phone ?? "",
+      heroMode: settings?.hero_mode === "new-year" ? "new-year" : defaults.heroMode,
+      categories: categories?.map((c) => c.name) ?? [...new Set(visibleCategoryNames(works))],
+      categoryRevision: categoryState?.revision ?? defaults.categoryRevision,
     },
     initialized: true,
+    metadataReady,
+    warnings: metadataReady ? [] : ["Не удалось загрузить часть данных витрины. Работы доступны, но оформление может быть неполным. Редактирование временно недоступно."],
   };
+}
+
+function visibleCategoryNames(works: Work[]) {
+  return works.filter((work) => work.status === "published" && work.availability !== "sold").map((work) => work.category);
 }
 
 async function categoryId(name: string) {

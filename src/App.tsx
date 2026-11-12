@@ -168,6 +168,14 @@ export default function Catalog() {
   const [treeEditor, setTreeEditor] = useState(false);
   const [carouselEditor, setCarouselEditor] = useState(false);
   const [carouselWorkIds, setCarouselWorkIds] = useState<string[] | null>(null);
+  const loadRevision = useRef(0);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [metadataReady, setMetadataReady] = useState(false);
+  const [catalogWarnings, setCatalogWarnings] = useState<string[]>([]);
+  const [accountWarnings, setAccountWarnings] = useState<string[]>([]);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
+  const [favoritesReady, setFavoritesReady] = useState(false);
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
@@ -225,32 +233,78 @@ export default function Catalog() {
   const selectedPhotos = selectedVariant ? variantPhotos(selectedVariant) : selected?.photos ?? [];
   const lightboxPhotos = selectedPhotos;
   const selectedPrice = selectedVariant ? selectedVariant.price : selected?.price ?? null;
-  const canEdit = admin && editingEnabled;
+  const canEdit = admin && editingEnabled && metadataReady && !loading;
   async function load() {
+    const revision = ++loadRevision.current;
+    const isCurrent = () => loadRevision.current === revision;
     setError("");
     setLoading(true);
-    try {
-      const [data, currentSession, adminSession] = await Promise.all([
-        loadCatalog(),
-        getSession(),
-        getAdminSession(),
-      ]);
-      const favorites = currentSession ? await loadFavoriteWorkIds() : new Set<string>();
-      setWorks(data.works);
-      setOrnaments(data.ornaments);
-      setCarouselWorkIds(data.carouselWorkIds);
-      setSettings(data.settings);
-      setAdmin(Boolean(adminSession));
+    setReloading(true);
+    setMetadataReady(false);
+    setFavoritesReady(false);
+    setAccountLoading(true);
+    setAdmin(false);
+    setEditing(undefined);
+    setTreeEditor(false);
+    setCarouselEditor(false);
+    setSettingsSection(null);
+    const catalogRequest = (async () => {
+      try {
+        const data = await loadCatalog();
+        if (!isCurrent()) return;
+        setWorks(data.works);
+        setOrnaments(data.ornaments);
+        setCarouselWorkIds(data.carouselWorkIds);
+        setSettings(data.settings);
+        setMetadataReady(data.metadataReady);
+        setCatalogWarnings(data.warnings);
+        setCatalogReady(true);
+      } catch {
+        if (isCurrent()) setError("Не удалось загрузить каталог. Проверьте соединение и попробуйте снова.");
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
+    })();
+    const accountRequest = (async () => {
+      const [sessionResult, adminResult] = await Promise.allSettled([getSession(), getAdminSession()]);
+      if (!isCurrent()) return;
+      const warnings: string[] = [];
+      const currentSession = sessionResult.status === "fulfilled" ? sessionResult.value : null;
       setUserEmail(currentSession?.user.email ?? null);
       const nickname = currentSession?.user.user_metadata.nickname;
       setUserNickname(typeof nickname === "string" ? nickname.trim() : "");
       setUserId(currentSession?.user.id ?? null);
-      setFavoriteIds(favorites);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить каталог");
-    } finally {
-      setLoading(false);
-    }
+      setFavoriteIds(new Set());
+      setFavoriteNotice(null);
+      setAdmin(Boolean(currentSession && adminResult.status === "fulfilled" && adminResult.value?.user.id === currentSession.user.id));
+      if (sessionResult.status === "rejected") {
+        warnings.push("Не удалось загрузить аккаунт. Витрина доступна, функции аккаунта временно недоступны.");
+        setAccountOpen(false);
+        setMessagesOpen(false);
+        setMessageWork(null);
+        setSelectedThreadId(null);
+        setCartOpen(false);
+        setPendingCartItem(null);
+        pendingCartOpen.current = false;
+      } else {
+        if (adminResult.status === "rejected") warnings.push("Не удалось проверить права аккаунта. Редактирование временно недоступно.");
+        if (currentSession) {
+          try {
+            const favorites = await loadFavoriteWorkIds();
+            if (!isCurrent()) return;
+            setFavoriteIds(favorites);
+            setFavoritesReady(true);
+          } catch {
+            warnings.push("Избранное временно недоступно. Повторите загрузку.");
+          }
+        } else setFavoritesReady(true);
+      }
+      if (!isCurrent()) return;
+      setAccountWarnings(warnings);
+      setAccountLoading(false);
+    })();
+    await Promise.all([catalogRequest, accountRequest]);
+    if (isCurrent()) setReloading(false);
   }
   useEffect(() => {
     load();
@@ -534,6 +588,12 @@ export default function Catalog() {
     setAccountError("");
     try {
       await signOut();
+      ++loadRevision.current;
+      setLoading(false);
+      setAccountLoading(false);
+      setReloading(false);
+      setFavoritesReady(true);
+      setAccountWarnings([]);
       setAdmin(false);
       setUserEmail(null);
       setUserNickname("");
@@ -566,11 +626,13 @@ export default function Catalog() {
     }
   }
   async function toggleFavorite(work: Work) {
+    if (!favoritesReady) return;
     if (!userEmail) {
       setLoginOpen(true);
       return;
     }
     if (favoriteRequestPending.current) return;
+    const revision = loadRevision.current;
     favoriteRequestPending.current = true;
     const wasFavorite = favoriteIds.has(work.id);
     setFavoriteNotice(null);
@@ -578,6 +640,7 @@ export default function Catalog() {
     try {
       if (wasFavorite) await removeFavorite(work.id);
       else await addFavorite(work.id);
+      if (revision !== loadRevision.current) return;
       setFavoriteIds((ids) => {
         const next = new Set(ids);
         if (wasFavorite) next.delete(work.id);
@@ -590,6 +653,7 @@ export default function Catalog() {
         error: false,
       });
     } catch {
+      if (revision !== loadRevision.current) return;
       setFavoriteNotice({
         workId: work.id,
         message: wasFavorite
@@ -711,7 +775,7 @@ export default function Catalog() {
                 <UserRound size={16} />Личный кабинет
               </button>
               <button type="button" onClick={openCart}><ShoppingBag size={16} />Корзина ({cart.items.length})</button>
-              <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}><Heart size={16} />Избранное ({favoriteIds.size})</button>
+              <button type="button" onClick={() => { setAccountOpen(true); if (accountMenu.current) accountMenu.current.open = false; }}><Heart size={16} />{favoritesReady ? `Избранное (${favoriteIds.size})` : "Избранное недоступно"}</button>
               <button type="button" onClick={() => openMessages(null)}><MessageCircle size={16} />Сообщения{chatInbox.unread_count > 0 && <span className="chat-count">{chatInbox.unread_count}</span>}</button>
               <button type="button" disabled={signingOut} onClick={() => void logout()}>
                 <LogOut size={16} />{signingOut ? "Выходим…" : "Выйти"}
@@ -720,12 +784,16 @@ export default function Catalog() {
             </div>
           </details>
         ) : (
-          <button className="admin-toggle" onClick={() => setLoginOpen(true)} disabled={loading}>
+          <button className="admin-toggle" onClick={() => setLoginOpen(true)} disabled={loading || accountLoading}>
             <UserRound size={16} /><span>Войти</span>
           </button>
         )}
         </div>
       </header>
+      {(catalogWarnings.length > 0 || accountWarnings.length > 0 || (error && catalogReady)) && <div className="catalog-load-warning" role="status">
+        {[...catalogWarnings, ...accountWarnings, ...(error && catalogReady ? [error] : [])].map((warning) => <p key={warning}>{warning}</p>)}
+        <button type="button" className="button secondary" disabled={reloading} onClick={() => void load()}>{reloading ? "Загружаем…" : "Повторить загрузку"}</button>
+      </div>}
       {adminAccountOpen ? (
         admin ? <Suspense fallback={<main className="account-access" role="status">Загружаем личный кабинет…</main>}>
           <AdminAccount
@@ -736,14 +804,14 @@ export default function Catalog() {
             onSectionChange={changeAdminSection}
             unreadCount={chatInbox.unread_count}
             messages={userId && <ChatInbox inbox={chatInbox} userId={userId} admin requestedId={selectedThreadId} />}
-            settingsForm={<SettingsEditor embedded settings={settings} section="general" onClose={() => navigateAccount(false)} onSaved={(next) => {
+            settingsForm={metadataReady && !loading ? <SettingsEditor embedded settings={settings} section="general" onClose={() => navigateAccount(false)} onSaved={(next) => {
               setSettings(next);
               setNotice("Настройки сохранены");
-            }} />}
+            }} /> : <p role="status">Настройки временно недоступны. Повторите загрузку перед редактированием.</p>}
           />
         </Suspense> : <main className="account-access">
           <h1>Личный кабинет</h1>
-          {loading ? <p role="status">Проверяем доступ…</p> : <>
+          {accountLoading ? <p role="status">Проверяем доступ…</p> : <>
             <p>{error || (userEmail ? "Этот раздел доступен только администратору." : "Войдите в аккаунт администратора, чтобы увидеть статистику и настройки сайта.")}</p>
             <div className="account-access-actions">
               {!userEmail && <button className="button primary" type="button" onClick={() => setLoginOpen(true)}>Войти</button>}
@@ -755,7 +823,7 @@ export default function Catalog() {
       {settings.heroMode === "new-year" ? <TreeHero
         works={works}
         ornaments={ornaments}
-        ready={!loading && !error}
+        ready={catalogReady}
         onOpen={open}
         stopMotion={selected !== null || treeEditor}
         editorActions={canEdit ? (
@@ -763,7 +831,7 @@ export default function Catalog() {
             <Settings2 size={16} />Управление украшениями
           </button>
         ) : undefined}
-      /> : <StandardHero works={works} selectedIds={carouselWorkIds} ready={!loading && !error} loading={loading} onOpen={open}
+      /> : <StandardHero works={works} selectedIds={carouselWorkIds} ready={catalogReady} loading={loading && !catalogReady} onOpen={open}
         editorActions={canEdit ? <button type="button" className="button secondary" disabled={loading || !!error} aria-haspopup="dialog" onClick={() => setCarouselEditor(true)}><Settings2 size={16} aria-hidden="true" />Карточки карусели</button> : undefined}
         stopMotion={selected !== null || carouselEditor || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
@@ -850,15 +918,15 @@ export default function Catalog() {
             <SortDropdown value={sort} onChange={setSort} />
           </div>
         </div>
-        {error ? (
+        {error && !catalogReady ? (
           <div className="empty">
             <h3>Не удалось загрузить работы</h3>
             <p>{error}</p>
-            <button className="button primary" onClick={load}>
+            <button className="button primary" disabled={reloading} onClick={() => void load()}>
               Попробовать снова
             </button>
           </div>
-        ) : loading ? (
+        ) : loading && !catalogReady ? (
           <div className="loading">
             <Loader2 className="spin" />
             Загружаем коллекцию…
@@ -957,7 +1025,7 @@ export default function Catalog() {
                         type="button"
                         className={"favorite-toggle" + (favoriteIds.has(w.id) ? " is-favorite" : "")}
                         onClick={() => void toggleFavorite(w)}
-                        disabled={favoriteBusy !== null}
+                        disabled={!favoritesReady || favoriteBusy !== null}
                         aria-label={favoriteIds.has(w.id) ? `Убрать «${w.title}» из избранного` : `Добавить «${w.title}» в избранное`}
                         aria-pressed={favoriteIds.has(w.id)}
                         title={favoriteIds.has(w.id) ? "Убрать из избранного" : "В избранное"}
@@ -1073,7 +1141,7 @@ export default function Catalog() {
                   type="button"
                   className={"product-favorite" + (favoriteIds.has(selected.id) ? " is-favorite" : "")}
                   onClick={() => void toggleFavorite(selected)}
-                  disabled={favoriteBusy !== null}
+                  disabled={!favoritesReady || favoriteBusy !== null}
                   aria-label={favoriteIds.has(selected.id) ? "Убрать из избранного" : "Добавить в избранное"}
                   aria-pressed={favoriteIds.has(selected.id)}
                 ><Heart size={20} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} /></button>}
@@ -1240,7 +1308,7 @@ export default function Catalog() {
             <p className="form-intro">{userEmail}</p>
             {userId && !admin && <button type="button" className="button secondary account-cart-link" onClick={openCart}><ShoppingBag size={18} />Открыть корзину ({cart.items.length})</button>}
             <h3>Понравившиеся работы</h3>
-            {publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
+            {!favoritesReady ? <p className="form-intro" role="status">{accountLoading ? "Загружаем избранное…" : "Избранное временно недоступно. Повторите загрузку."}</p> : publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
               <div className="favorite-list">
                 {publicWorks.filter((work) => favoriteIds.has(work.id)).map((work) => (
                   <article key={work.id}>
@@ -1265,7 +1333,7 @@ export default function Catalog() {
         {!cartNotice.error && <button type="button" onClick={() => { setCartNotice(null); openCart(); }}>Открыть корзину</button>}
         <button type="button" aria-label="Закрыть уведомление" onClick={() => setCartNotice(null)}><X size={15} /></button>
       </div>}
-      {admin && settingsSection && (
+      {canEdit && settingsSection && (
         <SettingsEditor
           settings={settings}
           section={settingsSection}
