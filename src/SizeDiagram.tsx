@@ -2,10 +2,10 @@ import { useId } from "react";
 import { displaySize, sizeAxes, unitLabel, type Measurements } from "../lib/measurements";
 import "./dimensions.css";
 
-export function SizeDiagram({ value }: { value: Measurements }) {
+export function SizeDiagram({ value, compact = false }: { value: Measurements; compact?: boolean }) {
   const marker = useId().replace(/:/g, "");
-  return <section className="size-display" aria-label="Размеры фигурки">
-    <div className="size-display-heading">Размеры</div>
+  return <section className={"size-display" + (compact ? " size-display-compact" : "")} aria-label="Размеры фигурки">
+    {!compact && <div className="size-display-heading">Размеры</div>}
     <div className="size-display-body">
       <svg className="size-diagram" viewBox="0 0 220 180" fill="none" aria-hidden="true">
         <defs><marker id={marker} viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="currentColor" strokeWidth="1.4" /></marker></defs>

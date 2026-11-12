@@ -36,6 +36,13 @@
 .size-values dd { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; }
 .size-values dd > span { font-size: 11px; font-weight: 400; }
 .size-axis { width: 7px; height: 2px; background: currentColor; }
+.size-display-compact { margin: -8px 0 16px; }
+.size-display-compact .size-display-body { gap: 8px; }
+.size-display-compact .size-diagram { flex-basis: 36px; width: 36px; height: 32px; }
+.size-display-compact .size-values { gap: 8px 12px; min-width: 0; }
+.size-display-compact .size-values dd { font-size: 12px; }
+.size-display-compact .size-values dd > span { font-size: 10px; }
+.card-size-note { margin: -8px 0 16px; color: #6a4d60; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 @media (max-width: 380px) {
   .dimensions-editor { padding: 12px 9px; }
   .size-input-grid { gap: 6px; }

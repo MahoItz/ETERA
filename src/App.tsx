@@ -943,6 +943,13 @@ export default function Catalog() {
                       {w.title}
                     </button>
                   </h3>
+                  {w.variants.length > 0 && !w.soldAsSet ? (
+                    <p className="card-size-note">Размеры — при выборе фигурки</p>
+                  ) : w.measurements ? (
+                    <SizeDiagram value={w.measurements} compact />
+                  ) : w.dimensions.trim() ? (
+                    <p className="card-size-note">Размеры: {w.dimensions}</p>
+                  ) : null}
                   <div className="card-bottom">
                     <span className={"card-price" + (catalogPrice(w) === null ? " on-request" : "")}>{catalogMoney(w)}</span>
                     {!canEdit && (
