@@ -75,7 +75,7 @@
 @media (min-width: 701px) and (max-width: 1100px) {
   .standard-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; padding-left: 28px; padding-right: 28px; }
   .standard-hero h1 { font-size: clamp(32px, 3.8vw, 40px); }
-  .standard-card-caption { padding-left: 4px; padding-right: 4px; gap: 6px; font-size: 11px; }
+  .standard-card-caption { padding-left: 4px; padding-right: 4px; gap: 6px; }
 }
 @media (max-width: 700px) {
   .standard-hero { grid-template-columns: 1fr; gap: 16px; padding: 20px 24px; }
@@ -91,7 +91,7 @@
   .standard-hero-description { font-size: 17px; }
   .standard-carousel { --stage-height: 270px; padding: 0; }
   .standard-hero-card { width: min(65%, 190px); padding: 6px 6px 0; transform: translate(calc(-50% + var(--card-offset) * 55%), calc(-50% + var(--card-distance) * 5px)) perspective(1000px) rotateY(calc(var(--card-offset) * -22deg)) scale(calc(1 - var(--card-distance) * .2)); }
-  .standard-card-caption { min-height: 48px; font-size: 11px; padding: 9px 5px; gap: 7px; }
+  .standard-card-caption { min-height: 48px; padding: 9px 5px; gap: 7px; }
   .standard-card-caption > svg { width: 18px; }
   .standard-carousel-arrow.is-previous { left: 0; }
   .standard-carousel-arrow.is-next { right: 0; }
@@ -100,8 +100,5 @@
 .standard-hero + .winter-values small { margin-top: 5px; }
 @media (max-width: 700px) {
   .standard-hero + .winter-values { padding-top: 12px; padding-bottom: 12px; }
-  .standard-hero + .winter-values > div { gap: 6px; }
   .standard-hero + .winter-values svg { width: 20px; height: 20px; }
-  .standard-hero + .winter-values span { font-size: 9px; letter-spacing: .5px; }
-  .standard-hero + .winter-values small { display: none; }
 }

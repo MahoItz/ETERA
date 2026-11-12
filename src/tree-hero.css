@@ -1,8 +1,8 @@
 .winter-hero { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: center; color: #fff1e2; padding: 36px clamp(24px, 5vw, 48px) 24px; background-color: #352132; background-image: linear-gradient(#2115234d, #2115234d), radial-gradient(ellipse at center, transparent 25%, #21152333 65%, #21152373 100%), var(--hero-background, none); background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 0 0 60px 60px; }
 .winter-copy { position: relative; z-index: 40; min-width: 0; pointer-events: none; }
-.winter-eyebrow { display: flex; align-items: center; gap: 12px; font-size: 9px; letter-spacing: 3px; margin-bottom: 26px; }
+.winter-eyebrow { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 1.5; letter-spacing: .6px; margin-bottom: 26px; }
 .winter-eyebrow svg { color: #efc18f; flex-shrink: 0; }
-.winter-eyebrow > span { width: 35px; height: 1px; background: #d7ad91; }
+.winter-eyebrow > span { width: 35px; height: 1px; flex-shrink: 0; background: #d7ad91; }
 .winter-copy h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.12; letter-spacing: -1.4px; margin: 0 0 clamp(34px, 3vw, 48px); }
 .winter-title-line { display: block; }
 .winter-copy h1 em { font-size: .77em; color: #dcc3e9; font-weight: 400; }
@@ -26,7 +26,7 @@
 .tree-toy:hover img, .tree-toy:focus-visible img { filter: drop-shadow(0 0 15px #ffcf8e80); transform: translateY(-3px) scale(1.035); }
 .toy-thread { position: absolute; left: 50%; width: 1px; height: clamp(32px, 5vw, 44px); bottom: 100%; background: linear-gradient(transparent, #d9b272); pointer-events: none; }
 .toy-thread::after { content: ''; position: absolute; bottom: -3px; left: -3px; width: 7px; height: 7px; border: 1px solid #e6c38e; border-radius: 50%; }
-.toy-title { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 210px; display: flex; align-items: center; gap: 6px; background: #352332e8; border: 1px solid #ba95795c; border-radius: 20px; padding: 8px 12px; font-size: 10px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toy-title { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 210px; display: flex; align-items: center; gap: 6px; background: #352332; border: 1px solid #ba95795c; border-radius: 20px; padding: 8px 12px; font-size: 12px; line-height: 1.5; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .tree-toy:hover .toy-title, .tree-toy:focus-visible .toy-title { opacity: 1; }
 .tree-toy-framed { padding: 7px; border: 1px solid #eac48b; background: linear-gradient(130deg, #b68258, #ffdeb5 45%, #9a643f); border-radius: 48% 48% 45% 45%; box-shadow: 0 14px 30px #20101b60; width: 22%; }
 .tree-toy-framed img { border-radius: 48% 48% 45% 45%; height: clamp(90px, 22vw, 130px); object-fit: cover; }
@@ -64,7 +64,7 @@
 @media (max-width: 700px) {
   .winter-hero { border-radius: 0 0 32px 32px; }
   .winter-copy p { font-size: 16px; }
-  .winter-eyebrow { margin-bottom: 22px; gap: 9px; font-size: 8px; letter-spacing: 1.8px; }
+  .winter-eyebrow { margin-bottom: 22px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .winter-dust i, .tree-lights i { animation: none; } .winter-hero *, .winter-hero *::after { transition: none !important; } }
 .tree-manager { padding: 24px 27px; }
