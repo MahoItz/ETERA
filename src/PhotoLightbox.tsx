@@ -124,7 +124,7 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose, onPhotoCha
                 aria-pressed={photoIndex === index}
                 onClick={() => setIndex(photoIndex)}
               >
-                <CatalogImage src={imageUrl(item.url)} alt="" draggable={false} />
+                <CatalogImage src={imageUrl(item.url)} alt="" preview sizes="80px" draggable={false} />
               </button>
             ))}
           </div>

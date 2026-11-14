@@ -5,7 +5,7 @@ async page => {
   const id = '11111111-1111-4111-8111-111111111111';
   let total = 12;
   const work = { id, title: 'Проверка лайков', description: '', material: 'Гипс', dimensions: '', price: 500, availability: 'available', status: 'published', featured: false, revision: 1, updated_at: '2026-11-14', photos: [], variants: [] };
-  await page.route('**/*', route => {
+  await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin === origin) return route.continue();
     const table = url.pathname.split('/').pop();
@@ -14,6 +14,14 @@ async page => {
       categories: [], category_list_state: { revision: 1 }, tree_ornaments: [],
       favorite_counts: total > 0 ? { [id]: total } : {},
     };
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: data.works, href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: (data.works).find(work => work.id === key || work.slug === key) ?? null });
+    }
     if (table in data) return route.fulfill({ json: data[table] });
     return route.abort();
   });

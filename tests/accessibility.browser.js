@@ -26,6 +26,14 @@ async page => {
       categories: [{ name: 'Декор' }, { name: 'Подарки' }], category_list_state: { revision: 1 }, tree_ornaments: [], favorite_counts: [],
     };
     const table = url.pathname.split('/').pop();
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: data.works, href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: (data.works).find(work => work.id === key || work.slug === key) ?? null });
+    }
     if (Object.hasOwn(data, table)) return route.fulfill({ json: data[table] });
     return route.abort();
   });
@@ -52,9 +60,11 @@ async page => {
         await page.keyboard.press('Enter');
         check(await group.getByRole('button', { name: 'Декор', exact: true }).getAttribute('aria-pressed') === 'true', 'Keyboard category selection');
         check(await all.getAttribute('aria-pressed') === 'false', 'Previous category must be deselected');
+        await page.waitForFunction(() => document.querySelectorAll('.work-card').length === 4);
         check(await page.locator('.work-card').count() === 4, 'Selected category must filter works');
         await all.focus();
         await page.keyboard.press('Space');
+        await page.waitForFunction(() => document.querySelectorAll('.work-card').length === 5);
         check(await page.locator('.work-card').count() === 5, 'Reset must show all works');
         check(await group.locator('[aria-pressed="true"]').count() === 1, 'Exactly one selected category');
         for (let i = 0; i < alts.length; i++) {

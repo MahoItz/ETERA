@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react";
+import { imagePreview } from "../lib/image-preview";
 
-type CatalogImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "srcSet"> & {
+type CatalogImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   src: string;
+  preview?: boolean;
 };
 
 export function CatalogImage(props: CatalogImageProps) {
@@ -9,8 +11,13 @@ export function CatalogImage(props: CatalogImageProps) {
   return <RetryingImage key={props.src} {...props} />;
 }
 
-function RetryingImage({ src, alt, onError, onLoad, ...props }: CatalogImageProps) {
-  const [requestSrc, setRequestSrc] = useState(src);
+function RetryingImage({ src, preview = false, srcSet, sizes, alt, onError, onLoad, ...props }: CatalogImageProps) {
+  // Image transformations require a compatible Storage plan; opt in explicitly.
+  const previewSrc = preview && import.meta.env.VITE_SUPABASE_IMAGE_TRANSFORMS === "true" ? imagePreview(src, 640) : null;
+  const [useOriginal, setUseOriginal] = useState(false);
+  const [requestSrc, setRequestSrc] = useState(previewSrc ?? src);
+  const responsiveSources = useOriginal ? undefined : srcSet ?? (previewSrc
+    ? [160, 320, 640, 960].map(width => `${imagePreview(src, width)} ${width}w`).join(", ") : undefined);
   const [failed, setFailed] = useState(false);
   const attempts = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -25,6 +32,8 @@ function RetryingImage({ src, alt, onError, onLoad, ...props }: CatalogImageProp
     {...props}
     alt={alt}
     src={requestSrc}
+    srcSet={responsiveSources}
+    sizes={sizes ?? (previewSrc ? "(max-width: 760px) 50vw, (max-width: 1100px) 33vw, 360px" : undefined)}
     onLoad={(event) => {
       if (timer.current !== null) clearTimeout(timer.current);
       timer.current = null;
@@ -32,6 +41,11 @@ function RetryingImage({ src, alt, onError, onLoad, ...props }: CatalogImageProp
     }}
     onError={(event) => {
       onError?.(event);
+      if ((previewSrc || srcSet) && !useOriginal) {
+        setUseOriginal(true);
+        setRequestSrc(src);
+        return;
+      }
       if (timer.current !== null) return;
       if (attempts.current >= 2) { setFailed(true); return; }
       let url: URL;

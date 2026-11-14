@@ -3,7 +3,7 @@ export const MAX_GALLERY_PHOTOS = 20;
 export type Photo = {url:string; alt:string};
 export type Availability = 'available'|'order'|'sold';
 export type Variant = {id:string; slug?:string; name:string; description?:string; imageUrl:string|null; photos?:Photo[]; price:number|null; availability:Availability; position:number; measurements?:Measurements|null};
-export type Work = {id:string; slug?:string; title:string; description:string; category:string; material:string; dimensions:string; measurements?:Measurements|null; soldAsSet?:boolean; price:number|null; availability:Availability; status:'published'|'draft'|'archived'; featured:boolean; treeImage?:string|null; showOnTree?:boolean; photos:Photo[]; variants:Variant[]; revision:number; updatedAt:string};
+export type Work = {id:string; slug?:string; title:string; description:string; category:string; material:string; dimensions:string; measurements?:Measurements|null; soldAsSet?:boolean; price:number|null; availability:Availability; status:'published'|'draft'|'archived'; featured:boolean; treeImage?:string|null; showOnTree?:boolean; photos:Photo[]; variants:Variant[]; revision:number; updatedAt:string; detailsLoaded?:boolean; variantCount?:number; photoCount?:number; catalogPrice?:number|null};
 export type HeroMode = 'standard'|'new-year';
 export type Settings = {name:string; contact:string; vk:string; telegram:string; phone:string; heroMode:HeroMode; categories:string[]; categoryRevision:number};
 export const defaults:Settings={name:'Etera',contact:'',vk:'',telegram:'',phone:'',heroMode:'standard',categories:['Феи и балерины','Барашки','Декор для дома'],categoryRevision:1};
@@ -39,7 +39,9 @@ export function filterWorks(works:Work[],q:string,category:string,sort:string,fa
  });
 }
 export function catalogPrice(work:Work):number|null {
+ if (work.detailsLoaded === false) return work.catalogPrice ?? null;
  if (!work.variants.length || work.soldAsSet) return work.price;
  const prices=work.variants.filter(v=>v.availability!=='sold'&&v.price!==null).map(v=>v.price!);
  return prices.length ? Math.min(...prices) : null;
 }
+export function workVariantCount(work:Work):number { return work.variantCount ?? work.variants.length; }

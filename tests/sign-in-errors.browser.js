@@ -23,6 +23,11 @@ async page => {
       }, json: { code: failure.code, message: 'SECRET_INTERNAL_FAILURE' } });
       return json({ access_token: token, refresh_token: 'mock-refresh', expires_in: 3600, token_type: 'bearer', user });
     }
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: [], href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'favorite_counts') return json({});
     if (table === 'user') return json(user);
     if (table === 'profiles') return json(null);
     if (table === 'site_settings') return json({ name: 'Тестовая мастерская', hero_mode: 'standard', contact: '' });

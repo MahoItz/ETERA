@@ -23,6 +23,14 @@ async page => {
       site_settings: { name: 'Тестовая мастерская', hero_mode: mode, contact: '' },
       categories: [{ name: 'Декор' }], category_list_state: { revision: 1 }, tree_ornaments: [],
     };
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: data.works, href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: (data.works).find(work => work.id === key || work.slug === key) ?? null });
+    }
     if (Object.hasOwn(data, table)) return route.fulfill({ json: data[table] });
     return route.abort();
   });

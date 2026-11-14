@@ -23,10 +23,19 @@ async page => {
     if (url.pathname.includes('/auth/v1/token')) return json({ access_token: token, refresh_token: 'mock-refresh', expires_in: 3600, token_type: 'bearer', user });
     if (table === 'user') return json(user);
     if (table === 'profiles') return json(null);
-    if (table === 'works') return json(works);
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: works, href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: (works).find(work => work.id === key || work.slug === key) ?? null });
+    }
+
     if (table === 'site_settings') return json({ name: 'Etera', contact: '' });
     if (table === 'categories') return json([{ name: 'Декор' }]);
     if (table === 'category_list_state') return json({ revision: 1 });
+    if (table === 'favorite_counts') return json({});
     if (['favorites', 'tree_ornaments'].includes(table)) return json([]);
     if (table === 'chat_inbox') return json({ threads: [], unread_count: 0, has_more: false });
     if (table === 'cart_list') return json(items);

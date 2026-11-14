@@ -16,7 +16,7 @@ async page => {
       directive: event.effectiveDirective, blocked: event.blockedURI,
     }));
   });
-  await page.route('**/*', route => {
+  await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (['http://127.0.0.1:4188', 'http://127.0.0.1:4189'].includes(url.origin)) return route.continue();
     const work = { id: '11111111-1111-4111-8111-111111111110', title: 'Тестовая фигурка',
@@ -26,6 +26,14 @@ async page => {
     const table = url.pathname.split('/').pop();
     const data = { works: [work], site_settings: { name: 'Мастерская', hero_mode: mode, contact: '' },
       categories: [{ name: 'Декор' }], category_list_state: { revision: 1 }, tree_ornaments: [], favorite_counts: [] };
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: data.works, href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: (data.works).find(work => work.id === key || work.slug === key) ?? null });
+    }
     return Object.hasOwn(data, table) ? route.fulfill({ json: data[table] }) : route.abort();
   });
   try {

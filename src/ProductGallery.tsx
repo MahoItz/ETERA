@@ -95,7 +95,7 @@ export function ProductGallery({ photos, title, index, onSelect, onMove, onExpan
           aria-label={`Фото ${photoIndex + 1}`}
           aria-pressed={index === photoIndex}
           onClick={() => onSelect(photoIndex)}
-        ><CatalogImage src={imageUrl(item.url)} alt="" loading="lazy" draggable={false} /></button>)}
+        ><CatalogImage src={imageUrl(item.url)} alt="" preview sizes="80px" loading="lazy" draggable={false} /></button>)}
       </div>}
     </section>
   );

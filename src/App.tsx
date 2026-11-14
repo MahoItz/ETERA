@@ -1,6 +1,10 @@
 import { CatalogImage } from "./CatalogImage";
 import { photoAlt } from "../lib/photo-alt";
+import { mergeCatalogWorks } from "../lib/catalog-cache";
+import { useCatalogPage } from "./useCatalogPage";
+import { loadCatalogCardsByIds, loadEditorCards, type CatalogPage } from "./catalog-pages";
 import { ProductGallery } from "./ProductGallery";
+import { ProductDetailSkeleton } from "./ProductDetailSkeleton";
 import { PasswordRecoveryEditor } from "./PasswordRecoveryEditor";
 import { usePasswordRecovery } from "./usePasswordRecovery";
 import { AdminModeContext, AdminModeIndicator } from "./AdminModeIndicator";
@@ -24,6 +28,7 @@ import { treeItems, type TreeOrnament } from "./tree-items";
 import { useOrnamentSort } from "./useOrnamentSort";
 import {
   useEffect,
+  useCallback,
   lazy,
   Suspense,
   useRef,
@@ -65,7 +70,7 @@ import {
 } from "lucide-react";
 import {
   defaults,
-  filterWorks,
+  workVariantCount,
   catalogPrice,
   visibleWorks,
   type Work,
@@ -79,6 +84,7 @@ import {
   addFavorite,
   removeFavorite,
   loadCatalog,
+  loadWork,
   saveSettings,
   saveCategories,
   type CategoryDraft,
@@ -100,7 +106,7 @@ const money = (n: number | null) =>
 const labels = { available: "В наличии", order: "Под заказ", sold: "Продано" };
 const catalogMoney = (work: Work) => {
   const price = catalogPrice(work);
-  return (work.variants.length && !work.soldAsSet && price !== null ? "от " : "") + money(price);
+  return (workVariantCount(work) && !work.soldAsSet && price !== null ? "от " : "") + money(price);
 };
 type CatalogHistoryState = { catalogRoute?: true; version?: 2; dialogDepth?: number };
 
@@ -200,8 +206,18 @@ export default function Catalog() {
     [scope, setScope] = useState("published"),
     [query, setQuery] = useState(""),
     [category, setCategory] = useState(""),
-    [sort, setSort] = useState("new"),
-    [limit, setLimit] = useState(24);
+    [sort, setSort] = useState("new");
+  const [initialPage, setInitialPage] = useState<CatalogPage | null>(null);
+  const workRequest = useRef<AbortController | null>(null);
+  const worksRef = useRef(works);
+  worksRef.current = works;
+  const [pendingWork, setPendingWork] = useState<{ key: string; variantId: string | null; edit: boolean } | null>(null);
+  const [workError, setWorkError] = useState("");
+  const [selectorWorks, setSelectorWorks] = useState<Work[] | null>(null);
+  const [selectorError, setSelectorError] = useState("");
+  const [selectorRetry, setSelectorRetry] = useState(0);
+  const [favoriteListLoading, setFavoriteListLoading] = useState(false);
+  const [favoriteListError, setFavoriteListError] = useState("");
   const [selected, setSelected] = useState<Work | null>(null),
     [photoIndex, setPhotoIndex] = useState(0),
     [lightboxOpen, setLightboxOpen] = useState(false),
@@ -238,8 +254,67 @@ export default function Catalog() {
   const lightboxPhotos = selectedPhotos;
   const selectedPrice = selectedVariant ? selectedVariant.price : selected?.price ?? null;
   const canEdit = admin && editingEnabled && metadataReady && !loading;
+  const page = useCatalogPage({ initial: initialPage, query, category, sort, scope: canEdit ? scope : "published", enabled: catalogReady && !loading && !accountLoading });
+  useEffect(() => {
+    if (page.works.length) setWorks(current => mergeCatalogWorks(current, page.works));
+  }, [page.works]);
+  const selectorsOpen = treeEditor || carouselEditor || editing !== undefined;
+  useEffect(() => {
+    const controller = new AbortController();
+    setSelectorWorks(null);
+    setSelectorError("");
+    if (canEdit && selectorsOpen) {
+      loadEditorCards(controller.signal).then(items => {
+        if (!controller.signal.aborted) { setSelectorWorks(items); setWorks(current => mergeCatalogWorks(current, items)); }
+      }).catch(() => { if (!controller.signal.aborted) setSelectorError("Не удалось загрузить список работ. Попробуйте снова."); });
+    }
+    return () => controller.abort();
+  }, [canEdit, selectorsOpen, selectorRetry]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setFavoriteListLoading(false);
+    setFavoriteListError("");
+    if (accountOpen && favoritesReady && userId && favoriteIds.size) {
+      setFavoriteListLoading(true);
+      loadCatalogCardsByIds([...favoriteIds], false, controller.signal).then(items => {
+        if (!controller.signal.aborted) setWorks(current => mergeCatalogWorks(current, items));
+      }).catch(() => { if (!controller.signal.aborted) setFavoriteListError("Не удалось загрузить избранные работы. Попробуйте открыть кабинет снова."); })
+        .finally(() => { if (!controller.signal.aborted) setFavoriteListLoading(false); });
+    }
+    return () => controller.abort();
+  }, [accountOpen, favoritesReady, userId, favoriteIds]);
+  const resolveWork = useCallback(async (key: string, variantId: string | null = null, edit = false) => {
+    workRequest.current?.abort();
+    const controller = new AbortController();
+    workRequest.current = controller;
+    const revision = loadRevision.current;
+    setPendingWork({ key, variantId, edit });
+    setWorkError("");
+    setSelected(null);
+    setLightboxOpen(false);
+    setPhotoIndex(0);
+    try {
+      const cached = worksRef.current.find(item => (item.id === key || item.slug === key) && item.detailsLoaded !== false
+        && (canEdit || (item.status === "published" && item.availability !== "sold")));
+      const work = cached ?? await loadWork(key, canEdit, controller.signal);
+      if (controller.signal.aborted || revision !== loadRevision.current) return;
+      if (!work) throw new Error("Работа больше недоступна.");
+      setWorks(items => mergeCatalogWorks(items, [work]));
+      if (edit) setEditing(work);
+      else {
+        setSelected(work);
+        setSelectedVariantId(work.variants.find(variant => variant.id === variantId || variant.slug === variantId)?.id ?? null);
+      }
+      setPendingWork(null);
+    } catch (cause) {
+      if (!controller.signal.aborted && revision === loadRevision.current) setWorkError(cause instanceof Error ? cause.message : "Не удалось загрузить работу.");
+    }
+  }, [canEdit]);
+  useEffect(() => () => workRequest.current?.abort(), []);
   async function load() {
     const revision = ++loadRevision.current;
+    workRequest.current?.abort();
+    setPendingWork(null);
     const isCurrent = () => loadRevision.current === revision;
     setError("");
     setLoading(true);
@@ -256,7 +331,8 @@ export default function Catalog() {
       try {
         const data = await loadCatalog();
         if (!isCurrent()) return;
-        setWorks(data.works);
+        setWorks(mergeCatalogWorks(data.works, data.heroWorks));
+        setInitialPage({ works: data.works, total: data.total });
         setFavoriteCounts(data.favoriteCounts);
         setOrnaments(data.ornaments);
         setCarouselWorkIds(data.carouselWorkIds);
@@ -312,7 +388,8 @@ export default function Catalog() {
     if (isCurrent()) setReloading(false);
   }
   useEffect(() => {
-    load();
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     if (loading) return;
@@ -322,12 +399,14 @@ export default function Catalog() {
       setAdminSection(section === "messages" || section === "settings" ? section : "overview");
       setSelectedThreadId(new URL(window.location.href).searchParams.get("conversation"));
       const { workId, variantId } = catalogLocation();
-      const work = works.find((item) => (item.slug === workId || item.id === workId)
-        && (canEdit || (item.status === "published" && item.availability !== "sold"))) ?? null;
-      setLightboxOpen(false);
-      setSelected(work);
-      setPhotoIndex(0);
-      setSelectedVariantId(work?.variants.find((variant) => variant.slug === variantId || variant.id === variantId)?.id ?? null);
+      if (workId) void resolveWork(workId, variantId);
+      else {
+        workRequest.current?.abort();
+        setPendingWork(null);
+        setLightboxOpen(false);
+        setSelected(null);
+        setSelectedVariantId(null);
+      }
     };
     const current = history.state as CatalogHistoryState | null;
     if (!current?.catalogRoute || current.version !== 2) {
@@ -343,7 +422,7 @@ export default function Catalog() {
     applyLocation();
     window.addEventListener("popstate", applyLocation);
     return () => window.removeEventListener("popstate", applyLocation);
-  }, [loading, works, canEdit]);
+  }, [loading, resolveWork]);
   useEffect(() => {
     const closeMenu = (event: PointerEvent) => {
       const menu = accountMenu.current;
@@ -378,9 +457,6 @@ export default function Catalog() {
     });
     return () => cancelAnimationFrame(frame);
   }, [selected]);
-  useEffect(() => {
-    setLimit(24);
-  }, [query, category, sort, scope, canEdit]);
   useEffect(() => {
     if (lightboxOpen || messagesOpen || loginOpen || recoveryOpen || selectedPhotos.length < 2) return;
     const handler = (e: KeyboardEvent) => {
@@ -435,7 +511,7 @@ export default function Catalog() {
       media.removeEventListener("change", reduce);
       for (const el of elements) el.classList.remove("reveal-pending");
     };
-  }, [loading, canEdit, query, category, sort, scope, limit, adminAccountOpen]);
+  }, [loading, canEdit, query, category, sort, scope, page.works.length, adminAccountOpen]);
   const publicWorks = visibleWorks(works);
   const categories = [
     ...new Set([
@@ -443,19 +519,10 @@ export default function Catalog() {
       ...(canEdit ? works : publicWorks).map((w) => w.category),
     ]),
   ];
-  const source = canEdit
-    ? works.filter(
-        (w) =>
-          scope === "all" ||
-          (scope === "draft"
-            ? w.status === "draft"
-            : scope === "archived"
-              ? w.status === "archived" || w.availability === "sold"
-              : w.status === "published" && w.availability !== "sold"),
-      )
-    : publicWorks;
-  const filtered = filterWorks(source, query, category, sort, favoriteCounts);
+  const filtered = page.works;
   function navigateAccount(show: boolean) {
+    workRequest.current?.abort();
+    setPendingWork(null);
     const url = new URL(window.location.href);
     if (show) url.searchParams.set("account", "admin");
     else url.searchParams.delete("account");
@@ -490,13 +557,9 @@ export default function Catalog() {
     else { setSelectedThreadId(conversationId); setMessagesOpen(true); setAccountOpen(false); }
   }
   function openAccountWork(id: string) {
-    const work = works.find((item) => item.id === id);
-    if (!work) {
-      setNotice("Работа больше недоступна. Обновите каталог.");
-      return;
-    }
     setEditingEnabled(true);
-    open(work);
+    updateCatalogUrl(id, null, "push");
+    void resolveWork(id);
   }
   function updateCatalogUrl(workId: string | null, variantId: string | null, action: "push" | "replace") {
     const url = new URL(window.location.href);
@@ -521,16 +584,18 @@ export default function Catalog() {
     workOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setWorkDialogRevision(value => value + 1);
     setLightboxOpen(false);
-    setSelected(w);
-    setPhotoIndex(0);
-    setSelectedVariantId(null);
     updateCatalogUrl(w.slug ?? w.id, null, "push");
+    void resolveWork(w.slug ?? w.id);
   }
   function closeWork() {
+    workRequest.current?.abort();
+    const wasEditing = pendingWork?.edit;
+    setPendingWork(null);
     const current = history.state as CatalogHistoryState | null;
     setLightboxOpen(false);
     setSelected(null);
     setSelectedVariantId(null);
+    if (wasEditing) return;
     if (current?.catalogRoute && current.version === 2 && current.dialogDepth) {
       history.go(-current.dialogDepth);
       return;
@@ -569,6 +634,7 @@ export default function Catalog() {
     setCategory("");
     setEditing(undefined);
     setNotice("Работа сохранена. Она доступна и с другого устройства.");
+    void load();
   }
   async function removeWork(work: Work) {
     setWorks((items) => items.filter((item) => item.id !== work.id));
@@ -576,6 +642,7 @@ export default function Catalog() {
     if (selected?.id === work.id) closeWork();
     setEditing(undefined);
     setNotice("Работа удалена.");
+    void load();
   }
   function toggleEditing() {
     setEditingEnabled((enabled) => !enabled);
@@ -594,6 +661,9 @@ export default function Catalog() {
     try {
       await signOut();
       ++loadRevision.current;
+      workRequest.current?.abort();
+      setPendingWork(null);
+      setInitialPage(null);
       setLoading(false);
       setAccountLoading(false);
       setReloading(false);
@@ -624,6 +694,7 @@ export default function Catalog() {
       setSettingsSection(null);
       setScope("published");
       setCategory("");
+      void load();
     } catch (e) {
       setAccountError(e instanceof Error ? e.message : "Не удалось выйти. Попробуйте ещё раз.");
     } finally {
@@ -660,7 +731,10 @@ export default function Catalog() {
       // Read the actual total, including changes made in other tabs or accounts.
       try {
         const counts = await loadFavoriteCounts();
-        if (revision === loadRevision.current) setFavoriteCounts(counts);
+        if (revision === loadRevision.current) {
+          setFavoriteCounts(counts);
+          if (sort === "popular") page.reload();
+        }
       } catch {
         if (revision === loadRevision.current) {
           setFavoriteCounts((counts) => {
@@ -695,7 +769,7 @@ export default function Catalog() {
     if (accountMenu.current) accountMenu.current.open = false;
   }
   async function addToCart(work: Work, variantId: string | null = null) {
-    if (work.variants.length && !work.soldAsSet && !variantId) { open(work); return; }
+    if (workVariantCount(work) && !work.soldAsSet && !variantId) { open(work); return; }
     const targetVariant = cartVariantId(work, variantId);
     if (!userId) { setPendingCartItem({ workId: work.id, variantId: targetVariant }); setLoginOpen(true); return; }
     if (pendingCartRequest.current || cart.busy) return;
@@ -854,7 +928,7 @@ export default function Catalog() {
         editorActions={canEdit ? <button type="button" className="button secondary" disabled={loading || !!error} aria-haspopup="dialog" onClick={() => setCarouselEditor(true)}><Settings2 size={16} aria-hidden="true" />Карточки карусели</button> : undefined}
         stopMotion={selected !== null || carouselEditor || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
-      <main id="catalog" className="catalog-section" tabIndex={-1}>
+      <main id="catalog" className="catalog-section" tabIndex={-1} aria-busy={loading || accountLoading || page.loading || page.moreLoading}>
         <div className="section-top" data-reveal>
           <div>
             <h2>
@@ -948,11 +1022,13 @@ export default function Catalog() {
               Попробовать снова
             </button>
           </div>
-        ) : loading && !catalogReady ? (
+        ) : (loading && !catalogReady) || page.loading ? (
           <div className="loading">
             <Loader2 className="spin" />
             Загружаем коллекцию…
           </div>
+        ) : page.error && filtered.length === 0 ? (
+          <p role="status">Работы временно недоступны. Повторите загрузку.</p>
         ) : filtered.length === 0 ? (
           <div className="empty">
             <Flower2 size={34} />
@@ -982,7 +1058,7 @@ export default function Catalog() {
           </div>
         ) : (
           <div className="grid">
-            {filtered.slice(0, limit).map((w, i) => (
+            {filtered.map((w, i) => (
               <article
                 key={w.id}
                 className={"work-card card-" + i}
@@ -993,6 +1069,7 @@ export default function Catalog() {
                     <CatalogImage
                       src={imageUrl(w.photos[0].url)}
                       alt={photoAlt(w.photos[0].alt, w.title)}
+                      preview
                       loading="lazy"
                     />
                   ) : (
@@ -1018,7 +1095,7 @@ export default function Catalog() {
                   )}
                   {w.photos.length > 0 && (
                     <span className="card-photo-count">
-                      <Images size={14} aria-hidden="true" />{w.photos.length} фото
+                      <Images size={14} aria-hidden="true" />{w.photoCount ?? w.photos.length} фото
                     </span>
                   )}
                 </div>
@@ -1033,7 +1110,7 @@ export default function Catalog() {
                       {w.title}
                     </button>
                   </h3>
-                  {w.variants.length > 0 && !w.soldAsSet ? (
+                  {workVariantCount(w) > 0 && !w.soldAsSet ? (
                     <p className="card-size-note">Размеры — при выборе фигурки</p>
                   ) : w.measurements ? (
                     <SizeDiagram value={w.measurements} compact />
@@ -1063,10 +1140,10 @@ export default function Catalog() {
                     )}
                   </div>
                   {!admin && <button type="button" className="cart-card-button" disabled={cart.busy} onClick={() => void addToCart(w)}>
-                    <ShoppingBag size={16} />{w.variants.length && !w.soldAsSet ? "Выбрать фигурку" : cart.items.some(item => item.snapshot.work_id === w.id && !item.snapshot.variant_id) ? "В корзине" : "В корзину"}
+                    <ShoppingBag size={16} />{workVariantCount(w) && !w.soldAsSet ? "Выбрать фигурку" : cart.items.some(item => item.snapshot.work_id === w.id && !item.snapshot.variant_id) ? "В корзине" : "В корзину"}
                   </button>}
                   {canEdit && (
-                    <button className="edit-card" onClick={() => setEditing(w)}>
+                    <button className="edit-card" onClick={() => void resolveWork(w.slug ?? w.id, null, true)}>
                       Редактировать работу <Settings2 size={14} />
                     </button>
                   )}
@@ -1075,12 +1152,16 @@ export default function Catalog() {
             ))}
           </div>
         )}
-        {filtered.length > limit && (
+        {page.error && <div className="catalog-load-warning" role="alert"><p>{page.error}</p>
+          <button type="button" className="button secondary" onClick={page.retry}>Повторить загрузку работ</button>
+        </div>}
+        {page.total > filtered.length && (
           <button
             className="button secondary more"
-            onClick={() => setLimit((n) => n + 24)}
+            disabled={page.moreLoading || page.loading}
+            onClick={() => void page.more()}
           >
-            Показать ещё {Math.min(24, filtered.length - limit)} работ{" "}
+            {page.moreLoading ? "Загружаем…" : `Показать ещё ${Math.min(24, page.total - filtered.length)} работ`}{" "}
             <ChevronDown size={17} />
           </button>
         )}
@@ -1159,8 +1240,13 @@ export default function Catalog() {
           {notice}
         </div>
       )}
-      {selected && (
-        <Modal key={workDialogRevision} title={selected.title} onClose={closeWork} wide variant="product">
+      {pendingWork?.edit && <Modal title="Редактирование работы" onClose={closeWork}>
+        {workError ? <div><p className="form-error" role="alert">{workError}</p><button type="button" className="button secondary" onClick={() => void resolveWork(pendingWork.key, pendingWork.variantId, pendingWork.edit)}>Повторить загрузку работы</button></div>
+          : <p role="status"><Loader2 className="spin" aria-hidden="true" /> Загружаем работу…</p>}
+      </Modal>}
+      {(selected || (pendingWork && !pendingWork.edit)) && (
+        <Modal key={workDialogRevision} title={selected?.title ?? "Загрузка товара"} onClose={closeWork} wide variant="product">
+          {selected ? <>
           <div className="detail">
             <div className="product-visual">
               <ProductGallery photos={selectedPhotos} title={selectedVariant?.name ?? selected.title}
@@ -1280,19 +1366,26 @@ export default function Catalog() {
             <button type="button" className="button primary" aria-haspopup="dialog" onClick={contactMaster}><MessageCircle size={18} />Написать мастеру</button>
           </div>}
           {userId && !admin && cart.items.length > 0 && <FloatingCartButton className="product-desktop-cart" count={cart.items.length} revision={cartAdditionRevision} onOpen={openCart} />}
+          </> : workError ? <div className="product-detail-load-error">
+            <p className="form-error" role="alert">{workError}</p>
+            <button type="button" className="button secondary" onClick={() => { if (pendingWork) void resolveWork(pendingWork.key, pendingWork.variantId); }}>Повторить загрузку работы</button>
+          </div> : <ProductDetailSkeleton />}
         </Modal>
       )}
-      {canEdit && editing !== undefined && (
+      {canEdit && selectorsOpen && !selectorWorks && <Modal title="Список работ" onClose={() => { setEditing(undefined); setTreeEditor(false); setCarouselEditor(false); }}>
+        {selectorError ? <><p className="form-error" role="alert">{selectorError}</p><button type="button" className="button secondary" onClick={() => setSelectorRetry(value => value + 1)}>Повторить загрузку списка</button></> : <p role="status">Загружаем список работ…</p>}
+      </Modal>}
+      {canEdit && editing !== undefined && selectorWorks && (
         <Suspense fallback={null}><WorkEditor
           work={editing}
           categories={categories}
-          materials={[...new Set(works.map((item) => item.material).filter(Boolean))]}
+          materials={[...new Set(selectorWorks.map((item) => item.material).filter(Boolean))]}
           onClose={() => setEditing(undefined)}
           onSaved={saved}
           onDeleted={removeWork}
         /></Suspense>
       )}
-      {canEdit && carouselEditor && <Suspense fallback={null}><HeroCarouselEditor works={works} selectedIds={carouselWorkIds}
+      {canEdit && carouselEditor && selectorWorks && <Suspense fallback={null}><HeroCarouselEditor works={selectorWorks} selectedIds={carouselWorkIds}
         onClose={() => setCarouselEditor(false)}
         onSave={async (ids) => {
           const savedIds = await saveHeroCarousel(carouselWorkIds, ids);
@@ -1301,7 +1394,7 @@ export default function Catalog() {
           setNotice("Карточки карусели сохранены.");
         }}
       /></Suspense>}
-      {canEdit && treeEditor && <TreeEditor works={works} ornaments={ornaments}
+      {canEdit && treeEditor && selectorWorks && <TreeEditor works={selectorWorks} ornaments={ornaments}
         onClose={() => setTreeEditor(false)}
         onSaved={(item) => setOrnaments((items) => [...items.filter((i) => i.id !== item.id), item].sort((a, b) => a.position - b.position))}
         onDeleted={(id) => setOrnaments((items) => items.filter((i) => i.id !== id))}
@@ -1341,7 +1434,7 @@ export default function Catalog() {
             <p className="form-intro">{userEmail}</p>
             {userId && !admin && <button type="button" className="button secondary account-cart-link" onClick={openCart}><ShoppingBag size={18} />Открыть корзину ({cart.items.length})</button>}
             <h3>Понравившиеся работы</h3>
-            {!favoritesReady ? <p className="form-intro" role="status">{accountLoading ? "Загружаем избранное…" : "Избранное временно недоступно. Повторите загрузку."}</p> : publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
+            {favoriteListError ? <p className="form-error" role="alert">{favoriteListError}</p> : !favoritesReady || favoriteListLoading ? <p className="form-intro" role="status">{accountLoading || favoriteListLoading ? "Загружаем избранное…" : "Избранное временно недоступно. Повторите загрузку."}</p> : publicWorks.filter((work) => favoriteIds.has(work.id)).length ? (
               <div className="favorite-list">
                 {publicWorks.filter((work) => favoriteIds.has(work.id)).map((work) => (
                   <article key={work.id}>
@@ -1356,9 +1449,9 @@ export default function Catalog() {
         </Modal>
       )}
       {userId && !admin && <Modal key={userId} title="Корзина" variant="cart" open={cartOpen} onClose={() => setCartOpen(false)}>
-        <Cart cart={cart} works={works} onSent={id => { setCartNotice(null); openMessages(id); }} onOpen={(work, variantId) => {
-          open(work);
-          if (variantId) { setSelectedVariantId(variantId); updateCatalogUrl(work.slug ?? work.id, work.variants.find(variant => variant.id === variantId)?.slug ?? variantId, "replace"); }
+        <Cart cart={cart} works={works} onSent={id => { setCartNotice(null); openMessages(id); }} onOpen={(workId, variantId) => {
+          updateCatalogUrl(workId, variantId, "push");
+          void resolveWork(workId, variantId);
         }} />
       </Modal>}
       {userId && !admin && cart.items.length > 0 && <FloatingCartButton count={cart.items.length} revision={cartAdditionRevision} onOpen={openCart} />}

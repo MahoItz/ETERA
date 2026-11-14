@@ -8,6 +8,7 @@ import { signInError } from "../lib/sign-in-error";
 import type { TreeOrnament } from "./tree-items";
 import { WorkSaveError, type WorkSaveRequest } from "./work-save";
 import { renewPhotoUpload, storagePathFromUrl as photoStoragePath, uploadProtectedPhoto } from "./work-photo-cleanup";
+import { loadCatalogPage, loadHeroCards, loadCatalogCardsByIds } from "./catalog-pages";
 
 type WorkRow = Record<string, unknown> & {
   id: string;
@@ -52,6 +53,7 @@ function fail(error: { message: string } | null) {
 }
 function mapWork(row: WorkRow): Work {
   return {
+    detailsLoaded: true,
     id: row.id, slug: row.slug,
     title: row.title,
     description: row.description,
@@ -85,6 +87,8 @@ function mapWork(row: WorkRow): Work {
 
 export async function loadCatalog(): Promise<{
   works: Work[];
+  total: number;
+  heroWorks: Work[];
   favoriteCounts: Record<string, number>;
   ornaments: TreeOrnament[];
   carouselWorkIds: string[] | null;
@@ -94,11 +98,7 @@ export async function loadCatalog(): Promise<{
   warnings: string[];
 }> {
   const [worksRequest, settingsRequest, categoriesRequest, categoryStateRequest, ornamentsRequest, countsRequest] = await Promise.allSettled([
-    supabase
-      .from("works")
-      .select("*, category:categories(name), photos(*), variants(*, photos(*))")
-      .order("featured", { ascending: false })
-      .order("updated_at", { ascending: false }),
+    loadCatalogPage(),
     supabase
       .from("site_settings")
       .select("*")
@@ -109,17 +109,26 @@ export async function loadCatalog(): Promise<{
     supabase.from("tree_ornaments").select("*").order("position").order("created_at"),
     loadFavoriteCounts(),
   ]);
-  if (worksRequest.status !== "fulfilled" || worksRequest.value.error) {
+  if (worksRequest.status !== "fulfilled") {
     throw new Error("Не удалось загрузить каталог. Проверьте соединение и попробуйте снова.");
   }
-  const works = ((worksRequest.value.data ?? []) as WorkRow[]).map(mapWork);
+  const { works, total } = worksRequest.value;
   const settings = settingsRequest.status === "fulfilled" && !settingsRequest.value.error ? settingsRequest.value.data : null;
   const categories = categoriesRequest.status === "fulfilled" && !categoriesRequest.value.error ? categoriesRequest.value.data : null;
   const categoryState = categoryStateRequest.status === "fulfilled" && !categoryStateRequest.value.error ? categoryStateRequest.value.data : null;
   const ornaments = ornamentsRequest.status === "fulfilled" && !ornamentsRequest.value.error ? ornamentsRequest.value.data : null;
   const metadataReady = settings !== null && categories !== null && categoryState !== null && ornaments !== null;
+  let heroWorks: Work[] = [];
+  let heroFailed = false;
+  try {
+    heroWorks = settings?.hero_mode === "new-year"
+      ? await loadCatalogCardsByIds((ornaments ?? []).map(item => item.work_id))
+      : await loadHeroCards(settings?.hero_work_ids ?? null);
+  } catch { heroFailed = true; }
   return {
     works,
+    total,
+    heroWorks,
     favoriteCounts: countsRequest.status === "fulfilled" ? countsRequest.value : {},
     ornaments: (ornaments ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
     carouselWorkIds: settings?.hero_work_ids ?? null,
@@ -136,10 +145,21 @@ export async function loadCatalog(): Promise<{
     initialized: true,
     metadataReady,
     warnings: [
+      ...heroFailed ? ["Не удалось загрузить работы для шапки. Каталог доступен."] : [],
       ...metadataReady ? [] : ["Не удалось загрузить часть данных витрины. Работы доступны, но оформление может быть неполным. Редактирование временно недоступно."],
       ...countsRequest.status === "fulfilled" ? [] : ["Не удалось загрузить счётчики лайков. Повторите загрузку."],
     ],
   };
+}
+
+export async function loadWork(key: string, admin = false, signal?: AbortSignal): Promise<Work | null> {
+  const column = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key) ? "id" : "slug";
+  let request = supabase.from("works").select("*, category:categories(name), photos(*), variants(*, photos(*))").eq(column, key);
+  if (!admin) request = request.eq("status", "published").neq("availability", "sold");
+  if (signal) request = request.abortSignal(signal);
+  const result = await request.maybeSingle();
+  if (result.error) throw new Error("Не удалось загрузить работу. Проверьте соединение и попробуйте снова.");
+  return result.data ? mapWork(result.data as WorkRow) : null;
 }
 
 function visibleCategoryNames(works: Work[]) {

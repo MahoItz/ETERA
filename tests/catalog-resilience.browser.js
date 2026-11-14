@@ -15,7 +15,7 @@ async page => {
   await page.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').pop();
     if (url.origin === origin) return route.continue();
-    if (table === failedTable) {
+    if (table === failedTable || (table === 'catalog_cards' && failedTable === 'works')) {
       if (networkFailure) return route.abort('failed');
       return route.fulfill({ status: 503, json: { message: 'SECRET_INTERNAL_FAILURE', code: 'XX000' } });
     }
@@ -24,10 +24,19 @@ async page => {
     if (url.pathname.includes('/auth/v1/token')) return json({ access_token: token, refresh_token: 'mock-refresh', expires_in: 3600, token_type: 'bearer', user });
     if (table === 'user') return json(user);
     if (table === 'profiles') return json(administrator ? { id: user.id } : null);
-    if (table === 'works') return json([work, { ...work, id: '11111111-1111-4111-8111-111111111112', slug: 'draft', title: 'Скрытый черновик', status: 'draft' }]);
+    if (table === 'catalog_cards') {
+      const result = await page.evaluate(async ({ works, href }) => (await import('/tests/helpers/catalog-fixture.js')).catalogFixture(works, href), { works: [work, { ...work, id: '11111111-1111-4111-8111-111111111112', slug: 'draft', title: 'Скрытый черновик', status: 'draft' }], href: url.href });
+      return route.fulfill({ json: result.rows, headers: { 'content-range': `*/${result.total}`, 'access-control-expose-headers': 'Content-Range' } });
+    }
+    if (table === 'works') {
+      const key = (url.searchParams.get('id') || url.searchParams.get('slug'))?.slice(3);
+      return route.fulfill({ json: ([work, { ...work, id: '11111111-1111-4111-8111-111111111112', slug: 'draft', title: 'Скрытый черновик', status: 'draft' }]).find(work => work.id === key || work.slug === key) ?? null });
+    }
+
     if (table === 'site_settings') return json({ name: 'Тестовая мастерская', hero_mode: 'standard', contact: '' });
     if (table === 'categories') return json([{ name: 'Декор' }]);
     if (table === 'category_list_state') return json({ revision: 7 });
+    if (table === 'favorite_counts') return json({});
     if (table === 'favorites') return json([{ work_id: work.id }]);
     if (table === 'tree_ornaments') return json([]);
     if (table === 'chat_inbox') return json({ threads: [], unread_count: 0, has_more: false });
@@ -40,7 +49,7 @@ async page => {
   const retry = () => page.getByRole('button', { name: /Попробовать снова|Повторить загрузку|Повторить/ }).first();
   const assertCatalog = async () => {
     await cards.first().waitFor();
-    check(await cards.count() === 1, 'Available work missing or private draft exposed');
+    await page.waitForFunction(() => document.querySelectorAll('.work-card').length === 1 && document.querySelector('#catalog')?.getAttribute('aria-busy') === 'false');
     check(!(await page.locator('body').innerText()).includes('SECRET_INTERNAL_FAILURE'), 'Raw server error exposed');
   };
   for (const table of ['category_list_state', 'categories', 'site_settings', 'tree_ornaments']) {

@@ -102,7 +102,7 @@ export function StandardHero({ works, selectedIds, editorActions, ready, loading
               aria-label={`Рассмотреть: ${work.title}`} aria-current={offset === 0 ? "true" : undefined}
               style={{ "--card-offset": offset, "--card-distance": distance, zIndex: 5 - distance } as CSSProperties}
               onClick={() => onOpen(work)}>
-              <div className="standard-card-photo"><CatalogImage src={imageUrl(work.photos[0].url)} alt={photoAlt(work.photos[0].alt, work.title)} draggable={false} loading={distance > 1 ? "lazy" : "eager"} /></div>
+              <div className="standard-card-photo"><CatalogImage src={imageUrl(work.photos[0].url)} alt={photoAlt(work.photos[0].alt, work.title)} preview sizes="(max-width: 760px) 80vw, 420px" draggable={false} loading={distance > 1 ? "lazy" : "eager"} /></div>
               <span className="standard-card-caption"><Flower2 size={21} aria-hidden="true" /><span>{work.title}</span><ArrowUpRight size={22} aria-hidden="true" /></span>
             </button>;
           })}
