@@ -26,11 +26,15 @@ export function validateWork(input:unknown): Omit<Work,'id'|'revision'|'updatedA
  return {title,description,category,material,dimensions,price:x.price as number|null,availability:x.availability as Work['availability'],status:x.status as Work['status'],featured:!!x.featured,photos,variants:[]};
 }
 export function visibleWorks(works:Work[]){return works.filter(w=>w.status==='published'&&w.availability!=='sold');}
-export function filterWorks(works:Work[],q:string,category:string,sort:string){
+export function filterWorks(works:Work[],q:string,category:string,sort:string,favoriteCounts:Record<string,number>={}){
  const search=q.trim().toLocaleLowerCase('ru');
  return works.filter(w=>(!category||w.category===category)&&(!search||[w.title,w.description,w.material].join(' ').toLocaleLowerCase('ru').includes(search))).sort((a,b)=>{
  if(sort==='name')return a.title.localeCompare(b.title,'ru');
  if(sort==='price')return (catalogPrice(a)??Infinity)-(catalogPrice(b)??Infinity);
+ if(sort==='popular'){
+  const difference=(favoriteCounts[b.id]??0)-(favoriteCounts[a.id]??0);
+  if(difference)return difference;
+ }
  return Number(b.featured)-Number(a.featured)||b.updatedAt.localeCompare(a.updatedAt);
  });
 }

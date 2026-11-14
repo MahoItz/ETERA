@@ -85,6 +85,7 @@ function mapWork(row: WorkRow): Work {
 
 export async function loadCatalog(): Promise<{
   works: Work[];
+  favoriteCounts: Record<string, number>;
   ornaments: TreeOrnament[];
   carouselWorkIds: string[] | null;
   settings: Settings;
@@ -92,7 +93,7 @@ export async function loadCatalog(): Promise<{
   metadataReady: boolean;
   warnings: string[];
 }> {
-  const [worksRequest, settingsRequest, categoriesRequest, categoryStateRequest, ornamentsRequest] = await Promise.allSettled([
+  const [worksRequest, settingsRequest, categoriesRequest, categoryStateRequest, ornamentsRequest, countsRequest] = await Promise.allSettled([
     supabase
       .from("works")
       .select("*, category:categories(name), photos(*), variants(*, photos(*))")
@@ -106,6 +107,7 @@ export async function loadCatalog(): Promise<{
     supabase.from("categories").select("name").order("position").order("name"),
     supabase.from("category_list_state").select("revision").eq("id", true).single(),
     supabase.from("tree_ornaments").select("*").order("position").order("created_at"),
+    loadFavoriteCounts(),
   ]);
   if (worksRequest.status !== "fulfilled" || worksRequest.value.error) {
     throw new Error("Не удалось загрузить каталог. Проверьте соединение и попробуйте снова.");
@@ -118,6 +120,7 @@ export async function loadCatalog(): Promise<{
   const metadataReady = settings !== null && categories !== null && categoryState !== null && ornaments !== null;
   return {
     works,
+    favoriteCounts: countsRequest.status === "fulfilled" ? countsRequest.value : {},
     ornaments: (ornaments ?? []).map((row) => ({ id: row.id, title: row.title, imageUrl: row.image_url, workId: row.work_id, position: row.position })),
     carouselWorkIds: settings?.hero_work_ids ?? null,
     settings: {
@@ -132,7 +135,10 @@ export async function loadCatalog(): Promise<{
     },
     initialized: true,
     metadataReady,
-    warnings: metadataReady ? [] : ["Не удалось загрузить часть данных витрины. Работы доступны, но оформление может быть неполным. Редактирование временно недоступно."],
+    warnings: [
+      ...metadataReady ? [] : ["Не удалось загрузить часть данных витрины. Работы доступны, но оформление может быть неполным. Редактирование временно недоступно."],
+      ...countsRequest.status === "fulfilled" ? [] : ["Не удалось загрузить счётчики лайков. Повторите загрузку."],
+    ],
   };
 }
 
@@ -403,6 +409,12 @@ export async function updatePassword(password: string) {
   const result = await supabase.auth.updateUser({ password });
   if (result.error) throw new Error(passwordRecoveryError(result.error,
     "Не удалось изменить пароль. Попробуйте ещё раз или запросите новую ссылку."));
+}
+
+export async function loadFavoriteCounts(): Promise<Record<string, number>> {
+  const result = await supabase.rpc("favorite_counts");
+  fail(result.error);
+  return result.data ?? {};
 }
 
 export async function loadFavoriteWorkIds(): Promise<Set<string>> {

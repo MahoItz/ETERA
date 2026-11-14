@@ -73,6 +73,7 @@ import {
   getAdminSession,
   getSession,
   loadFavoriteWorkIds,
+  loadFavoriteCounts,
   addFavorite,
   removeFavorite,
   loadCatalog,
@@ -113,7 +114,7 @@ function FloatingCartButton({ count, revision, onOpen, className = "" }: { count
 }
 function SortDropdown({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const root = useRef<HTMLDetailsElement>(null);
-  const options = [["new", "Сначала избранное и новое"], ["name", "По названию"], ["price", "По цене"]];
+  const options = [["new", "Сначала избранное и новое"], ["popular", "По популярности"], ["name", "По названию"], ["price", "По цене"]];
 
   useEffect(() => {
     const closeOutside = (event: MouseEvent) => {
@@ -176,6 +177,7 @@ export default function Catalog() {
   const [accountLoading, setAccountLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [favoritesReady, setFavoritesReady] = useState(false);
+  const [favoriteCounts, setFavoriteCounts] = useState<Record<string, number>>({});
   const [works, setWorks] = useState<Work[]>([]),
     [settings, setSettings] = useState<Settings>(defaults),
     [loading, setLoading] = useState(true),
@@ -253,6 +255,7 @@ export default function Catalog() {
         const data = await loadCatalog();
         if (!isCurrent()) return;
         setWorks(data.works);
+        setFavoriteCounts(data.favoriteCounts);
         setOrnaments(data.ornaments);
         setCarouselWorkIds(data.carouselWorkIds);
         setSettings(data.settings);
@@ -449,7 +452,7 @@ export default function Catalog() {
               : w.status === "published" && w.availability !== "sold"),
       )
     : publicWorks;
-  const filtered = filterWorks(source, query, category, sort);
+  const filtered = filterWorks(source, query, category, sort, favoriteCounts);
   function navigateAccount(show: boolean) {
     const url = new URL(window.location.href);
     if (show) url.searchParams.set("account", "admin");
@@ -652,6 +655,19 @@ export default function Catalog() {
         message: wasFavorite ? "Работа удалена из избранного." : "Работа добавлена в избранное.",
         error: false,
       });
+      // Read the actual total, including changes made in other tabs or accounts.
+      try {
+        const counts = await loadFavoriteCounts();
+        if (revision === loadRevision.current) setFavoriteCounts(counts);
+      } catch {
+        if (revision === loadRevision.current) {
+          setFavoriteCounts((counts) => {
+            const next = { ...counts };
+            delete next[work.id];
+            return next;
+          });
+        }
+      }
     } catch {
       if (revision !== loadRevision.current) return;
       setFavoriteNotice({
@@ -1020,7 +1036,12 @@ export default function Catalog() {
                   ) : null}
                   <div className="card-bottom">
                     <span className={"card-price" + (catalogPrice(w) === null ? " on-request" : "")}>{catalogMoney(w)}</span>
-                    {!canEdit && (
+                    {canEdit ? (
+                      <span className="favorite-toggle favorite-summary" aria-label={`Лайков: ${favoriteCounts[w.id] ?? 0}`}>
+                        <Heart size={20} aria-hidden="true" />
+                        <span className="favorite-count">{favoriteCounts[w.id] ?? 0}</span>
+                      </span>
+                    ) : (
                       <button
                         type="button"
                         className={"favorite-toggle" + (favoriteIds.has(w.id) ? " is-favorite" : "")}
@@ -1031,6 +1052,7 @@ export default function Catalog() {
                         title={favoriteIds.has(w.id) ? "Убрать из избранного" : "В избранное"}
                       >
                         <Heart size={20} fill={favoriteIds.has(w.id) ? "currentColor" : "none"} />
+                        {favoriteCounts[w.id] > 0 ? <span className="favorite-count" aria-label={`Лайков: ${favoriteCounts[w.id]}`}>{favoriteCounts[w.id]}</span> : null}
                       </button>
                     )}
                   </div>
@@ -1137,14 +1159,19 @@ export default function Catalog() {
             <div className="product-visual">
               <ProductGallery photos={selectedPhotos} title={selectedVariant?.name ?? selected.title}
                 index={photoIndex} onSelect={selectCatalogPhoto} onMove={moveCatalogPhoto} onExpand={() => setLightboxOpen(true)}>
-                {!canEdit && <button
+                {canEdit ? <span className="product-favorite favorite-summary" aria-label={`Лайков: ${favoriteCounts[selected.id] ?? 0}`}>
+                  <Heart size={20} aria-hidden="true" />
+                  <span className="favorite-count">{favoriteCounts[selected.id] ?? 0}</span>
+                </span> : <button
                   type="button"
                   className={"product-favorite" + (favoriteIds.has(selected.id) ? " is-favorite" : "")}
                   onClick={() => void toggleFavorite(selected)}
                   disabled={!favoritesReady || favoriteBusy !== null}
                   aria-label={favoriteIds.has(selected.id) ? "Убрать из избранного" : "Добавить в избранное"}
                   aria-pressed={favoriteIds.has(selected.id)}
-                ><Heart size={20} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} /></button>}
+                ><Heart size={20} fill={favoriteIds.has(selected.id) ? "currentColor" : "none"} />
+                  {favoriteCounts[selected.id] > 0 ? <span className="favorite-count" aria-label={`Лайков: ${favoriteCounts[selected.id]}`}>{favoriteCounts[selected.id]}</span> : null}
+                </button>}
               </ProductGallery>
               {favoriteNotice?.workId === selected.id && (
                 <p ref={favoriteFeedback}

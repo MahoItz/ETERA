@@ -221,8 +221,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
 .card-photo img { width: 100%; height: 100%; object-fit: cover; }
 .status-pill { position: absolute; top: 14px; left: 14px; font-size: 10px; padding: 8px 12px; border-radius: 24px; background: #f7e6d8ed; box-shadow: 0 3px 10px #3b263214; }
 .featured-icon { position: absolute; top: 14px; right: 14px; background: #f7e6d8ed; color: #82526a; width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; }
-.favorite-toggle { position: relative; z-index: 2; display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; padding: 0; border: 1px solid #b895b154; border-radius: 50%; background: #fff8f380; color: #82526a; transition: transform .2s, background .2s, color .2s; }
-.favorite-toggle:hover { transform: scale(1.08); background: #f4d9df; }
+.favorite-toggle { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0; min-width: 44px; height: 44px; padding: 0 11px; border: 1px solid #b895b154; border-radius: 999px; background: #fff8f380; color: #82526a; transition: transform .2s, background .2s, color .2s; }
+.favorite-count { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.favorite-toggle:not(.favorite-summary):hover { transform: scale(1.08); background: #f4d9df; }
 .favorite-toggle.is-favorite, .favorite-detail.is-favorite { color: #c62828; background: #ffe5e5; border-color: #d18585; }
 .card-photo-count { position: absolute; bottom: 12px; right: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid #ffffff80; border-radius: 20px; background: #fff8f3eb; color: #51374a; font-size: 11px; line-height: 1.2; box-shadow: 0 2px 8px #3b263214; }
 .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 7px 0; }
