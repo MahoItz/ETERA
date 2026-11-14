@@ -16,7 +16,10 @@
     "typecheck": "tsc --noEmit",
     "test:chat": "node --experimental-strip-types --test tests/chat-db.test.mjs",
     "test:cart": "node --experimental-strip-types --test tests/cart.test.ts tests/cart-db.test.mjs",
-    "test:asset-recovery": "node --test tests/asset-recovery.test.mjs"
+    "test:asset-recovery": "node --test tests/asset-recovery.test.mjs",
+    "test:security": "node --test tests/security-headers.test.mjs",
+    "security:headers": "node scripts/security-headers.mjs",
+    "security:verify": "node scripts/verify-security-headers.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",

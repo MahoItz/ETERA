@@ -45,6 +45,7 @@ import {
   ImagePlus,
   Images,
   Eye,
+  EyeOff,
   LogOut,
   Mail,
   MessageCircle,
@@ -1900,6 +1901,7 @@ function LoginEditor({
 }) {
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
+    [passwordVisible, setPasswordVisible] = useState(false),
     [nickname, setNickname] = useState(""),
     [mode, setMode] = useState<"login" | "registration" | "recovery">(initialRecovery ? "recovery" : "login"),
     [busy, setBusy] = useState(false),
@@ -1920,7 +1922,7 @@ function LoginEditor({
     return () => window.clearTimeout(timer);
   }, [resendCooldown]);
   function switchMode(nextMode: typeof mode) {
-    setMode(nextMode); setPassword(""); setError(""); setMessage("");
+    setMode(nextMode); setPassword(""); setPasswordVisible(false); setError(""); setMessage("");
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -2002,20 +2004,32 @@ function LoginEditor({
             disabled={busy}
           />
         </label>
-        {!recovery && <label htmlFor="login-password">
-          Пароль
-          <input
-            id="login-password"
-            type="password"
-            aria-label="Пароль"
-            autoComplete={registration ? "new-password" : "current-password"}
-            minLength={6}
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+        {!recovery && <div className="auth-password-field">
+          <label htmlFor="login-password">
+            Пароль
+            <input
+              id="login-password"
+              type={passwordVisible ? "text" : "password"}
+              aria-label="Пароль"
+              autoComplete={registration ? "new-password" : "current-password"}
+              minLength={6}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <button
+            type="button"
+            className="auth-password-toggle"
+            aria-label={passwordVisible ? "Скрыть пароль" : "Показать пароль"}
+            aria-controls="login-password"
             disabled={busy}
-          />
-        </label>}
+            onClick={() => setPasswordVisible(visible => !visible)}
+          >
+            {passwordVisible ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+          </button>
+        </div>}
         {mode === "login" && <button type="button" className="auth-forgot" disabled={busy} onClick={() => switchMode("recovery")}>Забыли пароль?</button>}
         {error && (
           <p className="form-error" role="alert">
