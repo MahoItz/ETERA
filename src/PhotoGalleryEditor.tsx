@@ -2,6 +2,7 @@ import { useId, useRef, useState, type DragEvent } from "react";
 import { ArrowLeft, ArrowRight, ImagePlus, Plus, Star, X } from "lucide-react";
 import { MAX_GALLERY_PHOTOS, type Photo } from "../lib/model";
 import { CatalogImage } from "./CatalogImage";
+import { photoAlt } from "../lib/photo-alt";
 import { imageUrl } from "./EditorUI";
 
 export function PhotoGalleryEditor({ title, photos, busy, onAdd, onRemove, onReorder, compact = false }: {
@@ -24,7 +25,7 @@ export function PhotoGalleryEditor({ title, photos, busy, onAdd, onRemove, onReo
     <input ref={input} className="visually-hidden" tabIndex={-1} aria-label={`Загрузить фото: ${title}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || photos.length >= MAX_GALLERY_PHOTOS}
       onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void onAdd(files); }} />
     <div className={`work-photo-stage${dragOver ? " is-drag-over" : ""}${!chosen ? " is-empty" : ""}`}>
-      {chosen ? <CatalogImage src={imageUrl(chosen.url)} alt={chosen.alt || title} /> : <div className="work-photo-empty">
+      {chosen ? <CatalogImage src={imageUrl(chosen.url)} alt={photoAlt(chosen.alt, title)} /> : <div className="work-photo-empty">
         <span className="work-upload-icon"><ImagePlus size={28} /></span><strong>{compact ? "Свои фотографии фигурки" : "Общий вид работы или набора"}</strong>
         <span>До {MAX_GALLERY_PHOTOS} фото · первое станет обложкой</span>
         <button type="button" className="button secondary" disabled={busy} onClick={() => input.current?.click()}><Plus size={16} />Выбрать фотографии</button>

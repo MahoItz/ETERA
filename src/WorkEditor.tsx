@@ -175,7 +175,7 @@ export function WorkEditor({ work, categories, materials, onClose, onSaved, onDe
           const blob = await compressPhoto(file);
           const url = URL.createObjectURL(blob);
           pending.current.set(url, { blob });
-          const photo = { url, alt: (variantId ? variants.find(variant => variant.id === variantId)?.name : title) || file.name };
+          const photo = { url, alt: (variantId ? variants.find(variant => variant.id === variantId)?.name : title)?.trim() || "" };
           if (variantId) setVariants(items => items.map(variant => variant.id === variantId ? { ...variant, photos: [...(variant.photos ?? []), photo] } : variant));
           else setPhotos((items) => [...items, photo]);
         } catch (error) { failures.push(`${file.name}: ${error instanceof Error ? error.message : "Не удалось обработать фото"}`); }

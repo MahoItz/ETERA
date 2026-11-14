@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 import { ArrowLeft, ArrowRight, ImagePlus, Maximize2 } from "lucide-react";
 import type { Photo } from "../lib/model";
 import { CatalogImage } from "./CatalogImage";
+import { photoAlt } from "../lib/photo-alt";
 import { imageUrl } from "./EditorUI";
 
 type ProductGalleryProps = {
@@ -68,7 +69,7 @@ export function ProductGallery({ photos, title, index, onSelect, onMove, onExpan
             onPointerCancel={() => { gesture.current = null; }}
             onLostPointerCapture={() => { gesture.current = null; }}
           >
-            <CatalogImage key={photo.url} src={imageUrl(photo.url)} alt={photo.alt || title} draggable={false} decoding="async"
+            <CatalogImage key={photo.url} src={imageUrl(photo.url)} alt={photoAlt(photo.alt, title)} draggable={false} decoding="async"
               onLoad={(event) => {
                 const image = event.currentTarget;
                 const ratio = image.naturalWidth / image.naturalHeight;

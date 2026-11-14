@@ -1,4 +1,5 @@
 import { CatalogImage } from "./CatalogImage";
+import { photoAlt } from "../lib/photo-alt";
 import { AdminModeIndicator } from "./AdminModeIndicator";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
@@ -104,7 +105,7 @@ export function PhotoLightbox({ title, photos, initialIndex, onClose, onPhotoCha
         onPointerCancel={() => { gesture.current = null; }}
         onLostPointerCapture={() => { gesture.current = null; }}
       >
-        {photo && <CatalogImage key={photo.url} src={imageUrl(photo.url)} alt={photo.alt || title} draggable={false} />}
+        {photo && <CatalogImage key={photo.url} src={imageUrl(photo.url)} alt={photoAlt(photo.alt, title)} draggable={false} />}
       </div>
       {photos.length > 1 && (
         <>

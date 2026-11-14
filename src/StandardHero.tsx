@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, typ
 import { ArrowLeft, ArrowRight, ArrowUpRight, Flower2 } from "lucide-react";
 import { type Work } from "../lib/model";
 import { CatalogImage } from "./CatalogImage";
+import { photoAlt } from "../lib/photo-alt";
 import { HeroValues } from "./HeroValues";
 import { imageUrl } from "./EditorUI";
 import { carouselOffset, heroItems } from "./hero-items";
@@ -101,7 +102,7 @@ export function StandardHero({ works, selectedIds, editorActions, ready, loading
               aria-label={`Рассмотреть: ${work.title}`} aria-current={offset === 0 ? "true" : undefined}
               style={{ "--card-offset": offset, "--card-distance": distance, zIndex: 5 - distance } as CSSProperties}
               onClick={() => onOpen(work)}>
-              <div className="standard-card-photo"><CatalogImage src={imageUrl(work.photos[0].url)} alt={work.photos[0].alt || work.title} draggable={false} loading={distance > 1 ? "lazy" : "eager"} /></div>
+              <div className="standard-card-photo"><CatalogImage src={imageUrl(work.photos[0].url)} alt={photoAlt(work.photos[0].alt, work.title)} draggable={false} loading={distance > 1 ? "lazy" : "eager"} /></div>
               <span className="standard-card-caption"><Flower2 size={21} aria-hidden="true" /><span>{work.title}</span><ArrowUpRight size={22} aria-hidden="true" /></span>
             </button>;
           })}

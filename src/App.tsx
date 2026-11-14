@@ -1,4 +1,5 @@
 import { CatalogImage } from "./CatalogImage";
+import { photoAlt } from "../lib/photo-alt";
 import { ProductGallery } from "./ProductGallery";
 import { PasswordRecoveryEditor } from "./PasswordRecoveryEditor";
 import { usePasswordRecovery } from "./usePasswordRecovery";
@@ -722,6 +723,7 @@ export default function Catalog() {
       ref={motionRoot}
       className="studio-shell"
     >
+      {!adminAccountOpen && <a className="skip-link" href="#catalog" onClick={() => document.getElementById("catalog")?.focus()}>Перейти к каталогу</a>}
       <AdminModeIndicator />
       <header className={"header" + (adminAccountOpen ? " account-header" : "")}>
         <a className="brand" href={adminAccountOpen ? import.meta.env.BASE_URL : "#"} onClick={adminAccountOpen ? (event) => { event.preventDefault(); navigateAccount(false); } : undefined}>
@@ -851,7 +853,7 @@ export default function Catalog() {
         editorActions={canEdit ? <button type="button" className="button secondary" disabled={loading || !!error} aria-haspopup="dialog" onClick={() => setCarouselEditor(true)}><Settings2 size={16} aria-hidden="true" />Карточки карусели</button> : undefined}
         stopMotion={selected !== null || carouselEditor || loginOpen || recoveryOpen || accountOpen || editing !== undefined || settingsSection !== null} />}
 
-      <main id="catalog" className="catalog-section">
+      <main id="catalog" className="catalog-section" tabIndex={-1}>
         <div className="section-top" data-reveal>
           <div>
             <h2>
@@ -862,9 +864,10 @@ export default function Catalog() {
         <div className="toolbar" data-reveal>
           <div className="category-controls">
             <div className="catalog-filter-group">
-              <div className="category-tabs" aria-label="Фильтр по категориям">
+              <div className="category-tabs" role="group" aria-label="Фильтр по категориям">
                 <button
                   className={!category ? "chosen" : ""}
+                  aria-pressed={!category}
                   onClick={() => setCategory("")}
                 >
                   Все работы
@@ -873,6 +876,7 @@ export default function Catalog() {
                   <button
                     key={c}
                     className={category === c ? "chosen" : ""}
+                    aria-pressed={category === c}
                     onClick={() => setCategory(c)}
                   >
                     {c}
@@ -889,7 +893,7 @@ export default function Catalog() {
           {canEdit && (
             <div className="catalog-admin-toolbar">
               <div className="admin-scope-panel">
-                <div className="scope-tabs" aria-label="Статус работ">
+                <div className="scope-tabs" role="group" aria-label="Статус работ">
                   {[
                     ["published", "В каталоге"],
                     ["draft", "Черновики"],
@@ -899,6 +903,7 @@ export default function Catalog() {
                     <button
                       key={k}
                       className={scope === k ? "chosen" : ""}
+                      aria-pressed={scope === k}
                       onClick={() => setScope(k)}
                     >
                       {v}
@@ -986,7 +991,7 @@ export default function Catalog() {
                   {w.photos[0] ? (
                     <CatalogImage
                       src={imageUrl(w.photos[0].url)}
-                      alt={w.photos[0].alt || w.title}
+                      alt={photoAlt(w.photos[0].alt, w.title)}
                       loading="lazy"
                     />
                   ) : (
@@ -1004,10 +1009,10 @@ export default function Catalog() {
                   {w.featured && (
                     <span
                       className="featured-icon"
-                      aria-label="Выбор мастера"
                       title="Выбор мастера"
                     >
-                      <Star size={15} />
+                      <Star size={15} aria-hidden="true" />
+                      <span className="sr-only">Выбор мастера</span>
                     </span>
                   )}
                   {w.photos.length > 0 && (
