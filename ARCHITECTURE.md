@@ -1,4 +1,4 @@
-# Архитектура Etera
+# Архитектура elveria
 
 ## Runtime
 
