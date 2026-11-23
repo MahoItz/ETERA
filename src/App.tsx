@@ -14,6 +14,7 @@ import { ChatInbox } from "./ChatInbox";
 import { ChatNotifications } from "./ChatNotifications";
 import { useChatInbox } from "./useChatInbox";
 import { useCart } from "./useCart";
+import { useSiteTraffic } from "./useSiteTraffic";
 import { Cart } from "./Cart";
 import { cartVariantId } from "../lib/cart";
 import "./cart.css";
@@ -224,6 +225,7 @@ export default function Catalog() {
     [selectedVariantId, setSelectedVariantId] = useState<string | null>(null),
     [editing, setEditing] = useState<Work | null | undefined>(undefined);
   const [workDialogRevision, setWorkDialogRevision] = useState(0);
+  useSiteTraffic(!accountLoading && !recoveryOpen, admin);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
   const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages">("overview");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);

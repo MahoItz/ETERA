@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, BarChart3, Heart, Image, LayoutDashboard, MessageCircle, RefreshCw, Settings2, Users } from "lucide-react";
 import { loadAdminDashboard, type AdminDashboardData, type DashboardPeriod } from "./admin-dashboard";
 import { CatalogImage } from "./CatalogImage";
+import { SiteTraffic } from "./SiteTraffic";
 import { imageUrl } from "./EditorUI";
 import "./admin-account.css";
 
@@ -80,6 +81,7 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
                   <button type="button" className="icon-button" disabled={busy} onClick={() => setRefresh((value) => value + 1)} aria-label="Обновить статистику"><RefreshCw size={18} /></button>
                 </div>
               </div>
+              <SiteTraffic period={period} refresh={refresh} />
               {busy && <div className="account-surface account-loading" role="status"><BarChart3 size={26} /><p>Загружаем статистику…</p></div>}
               {error && <div className="account-surface"><p className="form-error" role="alert">{error}</p><button type="button" className="button secondary" onClick={() => setRefresh((value) => value + 1)}>Попробовать снова</button></div>}
               {!busy && data && <>
