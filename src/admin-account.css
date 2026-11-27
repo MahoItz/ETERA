@@ -106,3 +106,9 @@
   .account-popular-work > svg { display: none; }
   .account-work-name strong { font-size: 12px; }
 }
+.diagnostic-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 24px 0; }
+.diagnostic-controls label { display: grid; gap: 6px; font-size: 13px; }
+.diagnostic-import input { max-width: 100%; }
+.diagnostic-reports article { padding: 18px 0; border-top: 1px solid var(--border, #ddd); overflow-wrap: anywhere; }
+.diagnostic-reports h3 { font-size: 16px; }
+.site-diagnostics > p { line-height: 1.65; }

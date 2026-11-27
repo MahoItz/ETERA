@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowUpRight, BarChart3, Heart, Image, LayoutDashboard, Mess
 import { loadAdminDashboard, type AdminDashboardData, type DashboardPeriod } from "./admin-dashboard";
 import { CatalogImage } from "./CatalogImage";
 import { SiteTraffic } from "./SiteTraffic";
+import { SiteDiagnostics } from "./SiteDiagnostics";
 import { imageUrl } from "./EditorUI";
 import "./admin-account.css";
 
@@ -16,8 +17,8 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
   settingsForm: ReactNode;
   onBack: () => void;
   onOpenWork: (id: string) => void;
-  section: "overview" | "settings" | "messages";
-  onSectionChange: (section: "overview" | "settings" | "messages") => void;
+  section: "overview" | "settings" | "messages" | "diagnostics";
+  onSectionChange: (section: "overview" | "settings" | "messages" | "diagnostics") => void;
   messages: ReactNode;
   unreadCount: number;
 }) {
@@ -30,6 +31,7 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
+    if (section !== "overview") return;
     const controller = new AbortController();
     setBusy(true);
     setError("");
@@ -42,7 +44,7 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
       if (!controller.signal.aborted) setBusy(false);
     });
     return () => controller.abort();
-  }, [period, refresh]);
+  }, [period, refresh, section]);
 
   return (
     <main className="admin-account">
@@ -60,11 +62,12 @@ export function AdminAccount({ email, settingsForm, onBack, onOpenWork, section,
             <button type="button" aria-current={section === "overview" ? "page" : undefined} onClick={() => onSectionChange("overview")}><LayoutDashboard size={18} />Обзор</button>
             <button type="button" aria-current={section === "messages" ? "page" : undefined} onClick={() => onSectionChange("messages")}><MessageCircle size={18} />Сообщения{unreadCount > 0 && <span className="chat-count">{unreadCount}</span>}</button>
             <button type="button" aria-current={section === "settings" ? "page" : undefined} onClick={() => onSectionChange("settings")}><Settings2 size={18} />Настройки сайта</button>
+            <button type="button" aria-current={section === "diagnostics" ? "page" : undefined} onClick={() => onSectionChange("diagnostics")}><BarChart3 size={18} />Ошибки загрузки</button>
           </nav>
           <p className="account-sidebar-note">Статистика и настройки доступны только администратору.</p>
         </aside>
         <div className="account-main">
-          {section === "messages" ? messages : section === "settings" ? (
+          {section === "diagnostics" ? <SiteDiagnostics /> : section === "messages" ? messages : section === "settings" ? (
             <section className="account-surface account-settings" aria-labelledby="account-settings-heading">
               <h2 id="account-settings-heading">Настройки сайта</h2>
               <p className="form-intro">Название мастерской, оформление шапки и контакты для связи с вами.</p>

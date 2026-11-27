@@ -15,6 +15,8 @@ import { ChatNotifications } from "./ChatNotifications";
 import { useChatInbox } from "./useChatInbox";
 import { useCart } from "./useCart";
 import { useSiteTraffic } from "./useSiteTraffic";
+import { DiagnosticHelp } from "./DiagnosticHelp";
+import { recordDiagnostic } from "./diagnostics";
 import { Cart } from "./Cart";
 import { cartVariantId } from "../lib/cart";
 import "./cart.css";
@@ -227,7 +229,17 @@ export default function Catalog() {
   const [workDialogRevision, setWorkDialogRevision] = useState(0);
   useSiteTraffic(!accountLoading && !recoveryOpen, admin);
   const [settingsSection, setSettingsSection] = useState<"general" | "categories" | null>(null);
-  const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages">("overview");
+  const [adminSection, setAdminSection] = useState<"overview" | "settings" | "messages" | "diagnostics">("overview");
+  const [slowLoad, setSlowLoad] = useState(false);
+  useEffect(() => {
+    setSlowLoad(false);
+    if (!loading && !accountLoading) return;
+    const timer = window.setTimeout(() => {
+      setSlowLoad(true);
+      recordDiagnostic({ kind: "slow", service: "app", resource: "catalog", duration_ms: 25000 });
+    }, 25000);
+    return () => window.clearTimeout(timer);
+  }, [loading, accountLoading]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [messageWork, setMessageWork] = useState<{ id: string; title: string } | null>(null);
@@ -343,6 +355,7 @@ export default function Catalog() {
         setCatalogWarnings(data.warnings);
         setCatalogReady(true);
       } catch {
+        recordDiagnostic({ kind: "catalog", service: "app", resource: "catalog" });
         if (isCurrent()) setError("Не удалось загрузить каталог. Проверьте соединение и попробуйте снова.");
       } finally {
         if (isCurrent()) setLoading(false);
@@ -398,7 +411,7 @@ export default function Catalog() {
     const applyLocation = () => {
       setAdminAccountOpen(new URL(window.location.href).searchParams.get("account") === "admin");
       const section = new URL(window.location.href).searchParams.get("section");
-      setAdminSection(section === "messages" || section === "settings" ? section : "overview");
+      setAdminSection(section === "messages" || section === "settings" || section === "diagnostics" ? section : "overview");
       setSelectedThreadId(new URL(window.location.href).searchParams.get("conversation"));
       const { workId, variantId } = catalogLocation();
       if (workId) void resolveWork(workId, variantId);
@@ -544,7 +557,7 @@ export default function Catalog() {
     if (accountMenu.current) accountMenu.current.open = false;
     window.scrollTo({ top: 0, behavior: "instant" });
   }
-  function changeAdminSection(section: "overview" | "settings" | "messages", conversationId: string | null = null) {
+  function changeAdminSection(section: "overview" | "settings" | "messages" | "diagnostics", conversationId: string | null = null) {
     const url = new URL(window.location.href);
     if (section === "overview") url.searchParams.delete("section"); else url.searchParams.set("section", section);
     if (conversationId) url.searchParams.set("conversation", conversationId); else url.searchParams.delete("conversation");
@@ -885,9 +898,11 @@ export default function Catalog() {
         )}
         </div>
       </header>
+      {slowLoad && <div className="catalog-load-warning" role="status"><p>Загрузка занимает больше времени, чем обычно.</p><DiagnosticHelp /></div>}
       {(catalogWarnings.length > 0 || accountWarnings.length > 0 || (error && catalogReady)) && <div className="catalog-load-warning" role="status">
         {[...catalogWarnings, ...accountWarnings, ...(error && catalogReady ? [error] : [])].map((warning) => <p key={warning}>{warning}</p>)}
         <button type="button" className="button secondary" disabled={reloading} onClick={() => void load()}>{reloading ? "Загружаем…" : "Повторить загрузку"}</button>
+        <DiagnosticHelp />
       </div>}
       {adminAccountOpen ? (
         admin ? <Suspense fallback={<main className="account-access" role="status">Загружаем личный кабинет…</main>}>
@@ -1020,6 +1035,7 @@ export default function Catalog() {
           <div className="empty">
             <h3>Не удалось загрузить работы</h3>
             <p>{error}</p>
+            <DiagnosticHelp />
             <button className="button primary" disabled={reloading} onClick={() => void load()}>
               Попробовать снова
             </button>

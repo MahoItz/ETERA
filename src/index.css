@@ -662,3 +662,5 @@ dd { margin: 0; }
   .reveal-pending:not(.is-visible) { opacity: 1; transform: none; }
   .hero-parallax, .work-card:hover { transform: none; }
 }
+.diagnostic-help { max-width: 640px; margin: 12px auto; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.diagnostic-help p { margin: 8px 0; }

@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { recordDiagnostic } from "./diagnostics";
+import { DiagnosticHelp } from "./DiagnosticHelp";
 
 export class RootErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -8,7 +10,7 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, { fail
   }
 
   componentDidCatch(_error: Error, _info: ErrorInfo) {
-    // Keep the public screen free of implementation details; hosting logs retain diagnostics.
+    recordDiagnostic({ kind: "render", service: "app", resource: "render" });
   }
 
   render() {
@@ -17,6 +19,7 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, { fail
         <h1>Сайт временно недоступен</h1>
         <p>Попробуйте обновить страницу немного позже.</p>
         <button type="button" onClick={() => window.location.reload()}>Обновить страницу</button>
+        <DiagnosticHelp />
       </main>;
     }
     return this.props.children;

@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     // The custom domain elveria.ru serves the site from the domain root.
     base: "/",
+    define: { "import.meta.env.VITE_APP_BUILD": JSON.stringify(env.GITHUB_SHA?.slice(0, 12) || "local") },
     // Public GitHub Pages deployments do not need to publish the full source.
     build: { outDir: "dist", sourcemap: false },
   };
